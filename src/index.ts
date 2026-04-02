@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { existsSync, readdirSync } from 'fs';
+import { join } from 'path';
 
 /**
  * Supported AI development tool types
@@ -21,11 +23,9 @@ export const TOOL_DIRECTORIES: Record<ToolType, string[]> = {
 export function detectTool(basePath: string): ToolType | null {
   for (const [tool, dirs] of Object.entries(TOOL_DIRECTORIES)) {
     const toolType = tool as ToolType;
-    // Check if any of the tool's directories exist
     const exists = dirs.some((dir) => {
       try {
-        const fs = require('fs');
-        return fs.existsSync(require('path').join(basePath, dir));
+        return existsSync(join(basePath, dir));
       } catch {
         return false;
       }

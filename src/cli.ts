@@ -38,6 +38,11 @@ program
       process.exit(1);
     }
     console.log(`Detected tool: ${tool}\n`);
+    if (!tool) {
+      console.error('Error: No AIDD tool detected (.claude, .github, .cursor, .opencode)');
+      process.exit(1);
+    }
+    console.log(`Detected tool: ${tool}\n`);
 
     if (!options.pluginsOnly && !options.noOverlay) {
       console.log('Base overlay: already installed (stub)');
