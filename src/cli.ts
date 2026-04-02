@@ -17,60 +17,17 @@ import {
   type ToolType,
   type ValidationResult,
 } from './index.js';
+import { getOverlayConfig, getGlobalConfig, DEFAULT_OVERLAY_REPO } from './config.js';
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, cpSync, rmSync, statSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { execSync } from 'child_process';
-import { homedir } from 'os';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const PACKAGE_ROOT = join(__dirname, '..');
 const GLOBAL_CONFIG_FILE = join(PACKAGE_ROOT, 'config.json');
-
-const DEFAULT_OVERLAY_REPO = 'RebelliousSmile/aidd-claude-custom';
-
-function getGlobalConfig(): { repo: string; branch: string } | null {
-  if (existsSync(GLOBAL_CONFIG_FILE)) {
-    try {
-      const content = readFileSync(GLOBAL_CONFIG_FILE, 'utf-8');
-      const config = JSON.parse(content);
-      if (config.overlay?.repo) {
-        return {
-          repo: config.overlay.repo,
-          branch: config.overlay.branch || 'main',
-        };
-      }
-    } catch (e) {
-      console.error('Warning: Could not read config');
-    }
-  }
-  return null;
-}
-
-function getOverlayConfig(projectRoot: string): { repo: string; branch: string } | null {
-  const configPath = join(projectRoot, 'config', 'global.json');
-  
-  if (existsSync(configPath)) {
-    try {
-      const configContent = readFileSync(configPath, 'utf-8');
-      const config = JSON.parse(configContent);
-      if (config.overlay?.repo) {
-        return {
-          repo: config.overlay.repo,
-          branch: config.overlay.branch || 'main',
-        };
-      }
-    } catch (e) {
-    }
-  }
-  
-  const globalConfig = getGlobalConfig();
-  if (globalConfig) return globalConfig;
-  
-  return { repo: DEFAULT_OVERLAY_REPO, branch: 'main' };
-}
 
 const program = new Command();
 
@@ -284,7 +241,7 @@ program
       cleaned++;
     }
     
-    if (overlayConfig) {
+    if (overlayConfig && existsSync(configPath)) {
       try {
         const configContent = readFileSync(configPath, 'utf-8');
         const config = JSON.parse(configContent);
@@ -808,10 +765,12 @@ pluginCmd
       
       delete pluginsConfig[name];
       
-      const configContent = readFileSync(configPath, 'utf-8');
-      const config = JSON.parse(configContent);
-      config.plugins = pluginsConfig;
-      writeFileSync(configPath, JSON.stringify(config, null, 2));
+      if (existsSync(configPath)) {
+        const configContent = readFileSync(configPath, 'utf-8');
+        const config = JSON.parse(configContent);
+        config.plugins = pluginsConfig;
+        writeFileSync(configPath, JSON.stringify(config, null, 2));
+      }
       
       console.log(`\nPlugin "${name}" removed successfully`);
       
