@@ -1,2 +1,4 @@
 .aidd/cache/
 node_modules/
+.opencode/
+opencode.json
