@@ -149,7 +149,7 @@ program
             }
         }
     }
-    console.log('Available plugins: none (configure in config/global.json)');
+    console.log('Run "aidd-custom plugin list" to see available plugins');
 });
 program
     .command('clean')
