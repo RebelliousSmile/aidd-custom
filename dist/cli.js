@@ -152,67 +152,6 @@ program
     console.log('Available plugins: none (configure in .aidd/config.json)');
 });
 program
-    .command('update')
-    .description('Check overlay/plugin updates')
-    .action(async () => {
-    const projectRoot = process.cwd();
-    const configPath = join(projectRoot, '.aidd', 'config.json');
-    console.log('Checking for updates...\n');
-    const tool = detectTool(projectRoot);
-    if (!tool) {
-        console.error('Error: No AIDD tool detected');
-        process.exit(1);
-    }
-    console.log(`Tool: ${tool}`);
-    if (!existsSync(configPath)) {
-        console.log('No .aidd/config.json found - run install first');
-        return;
-    }
-    let overlayConfig = null;
-    try {
-        const configContent = readFileSync(configPath, 'utf-8');
-        const config = JSON.parse(configContent);
-        if (config.overlay?.repo) {
-            overlayConfig = {
-                repo: config.overlay.repo,
-                branch: config.overlay.branch || 'main',
-            };
-        }
-    }
-    catch (e) {
-        console.log('Warning: Could not read .aidd/config.json');
-    }
-    if (!overlayConfig) {
-        console.log('No overlay configured');
-        return;
-    }
-    console.log(`Overlay repo: ${overlayConfig.repo}`);
-    console.log(`Branch: ${overlayConfig.branch}\n`);
-    const customDir = getToolCustomDir(tool);
-    const rulesDir = getToolRulesDir(tool);
-    const agentsDir = join(getToolAgentsDir(tool), 'custom');
-    const templatesDir = 'aidd_docs/templates';
-    console.log('Installed files:');
-    if (existsSync(join(projectRoot, customDir))) {
-        const count = getFileCount(join(projectRoot, customDir));
-        console.log(`  - ${customDir} (${count} files)`);
-    }
-    if (existsSync(join(projectRoot, rulesDir))) {
-        const count = getFileCount(join(projectRoot, rulesDir));
-        console.log(`  - ${rulesDir} (${count} files)`);
-    }
-    if (existsSync(join(projectRoot, agentsDir))) {
-        const count = getFileCount(join(projectRoot, agentsDir));
-        console.log(`  - ${agentsDir} (${count} files)`);
-    }
-    if (existsSync(join(projectRoot, templatesDir))) {
-        const count = getFileCount(join(projectRoot, templatesDir));
-        console.log(`  - ${templatesDir} (${count} files)`);
-    }
-    console.log('\nOverlay: up to date');
-    console.log('Run install to update');
-});
-program
     .command('clean')
     .description('Remove all overlay files')
     .action(async () => {
@@ -281,7 +220,7 @@ program
 });
 program
     .command('doctor')
-    .description('Verify installation health')
+    .description('Verify installation health (checks for stale files)')
     .action(async () => {
     const projectRoot = process.cwd();
     const configPath = join(projectRoot, '.aidd', 'config.json');
@@ -303,8 +242,20 @@ program
     const rulesDir = getToolRulesDir(tool);
     const agentsDir = getToolAgentsDir(tool);
     const templatesDir = 'aidd_docs/templates';
-    let installed = 0;
-    let missing = 0;
+    let overlayConfig = null;
+    try {
+        const configContent = readFileSync(configPath, 'utf-8');
+        const config = JSON.parse(configContent);
+        if (config.overlay?.repo) {
+            overlayConfig = {
+                repo: config.overlay.repo,
+                branch: config.overlay.branch || 'main',
+            };
+        }
+    }
+    catch (e) {
+        console.log('Warning: Could not read .aidd/config.json');
+    }
     const checks = [
         { path: customDir, name: 'Commands' },
         { path: rulesDir, name: 'Rules' },
@@ -315,16 +266,74 @@ program
     for (const check of checks) {
         const fullPath = join(projectRoot, check.path);
         if (existsSync(fullPath)) {
-            const count = getFileCount(fullPath);
-            console.log(`✓ ${check.name}: installed (${count} files)`);
-            installed++;
+            const localCount = getFileCount(fullPath);
+            console.log(`✓ ${check.name}: installed (${localCount} files)`);
         }
         else {
             console.log(`✗ ${check.name}: missing`);
-            missing++;
         }
     }
-    console.log(`\nStatus: ${installed} installed, ${missing} missing`);
+    if (overlayConfig) {
+        console.log('\n=== File Count Validation ===');
+        console.log('Fetching overlay to compare counts...\n');
+        const tempDir = join(projectRoot, '.aidd', 'cache', 'doctor-temp');
+        if (existsSync(tempDir)) {
+            rmSync(tempDir, { recursive: true, force: true });
+        }
+        mkdirSync(tempDir, { recursive: true });
+        try {
+            const repoUrl = `https://github.com/${overlayConfig.repo}.git`;
+            execSync(`git clone --depth 1 --branch ${overlayConfig.branch} ${repoUrl} "${tempDir}"`, {
+                cwd: projectRoot,
+                stdio: 'pipe',
+            });
+            const overlayChecks = [
+                {
+                    src: join(tempDir, 'commands', 'custom'),
+                    dest: join(projectRoot, customDir),
+                    name: 'Commands'
+                },
+                {
+                    src: join(tempDir, 'rules', 'custom'),
+                    dest: join(projectRoot, rulesDir),
+                    name: 'Rules'
+                },
+                {
+                    src: join(tempDir, 'agents'),
+                    dest: join(projectRoot, agentsDir, 'custom'),
+                    name: 'Agents'
+                },
+                {
+                    src: join(tempDir, 'templates', 'custom'),
+                    dest: join(projectRoot, templatesDir),
+                    name: 'Templates'
+                },
+            ];
+            let hasMismatch = false;
+            for (const check of overlayChecks) {
+                const overlayCount = existsSync(check.src) ? getFileCount(check.src) : 0;
+                const localCount = existsSync(check.dest) ? getFileCount(check.dest) : 0;
+                if (localCount !== overlayCount && localCount > 0) {
+                    console.log(`⚠ ${check.name}: local (${localCount}) ≠ overlay (${overlayCount}) - run "clean" then "install" to fix`);
+                    hasMismatch = true;
+                }
+                else if (localCount === overlayCount && localCount > 0) {
+                    console.log(`✓ ${check.name}: in sync (${localCount} files)`);
+                }
+            }
+            if (hasMismatch) {
+                console.log('\n⚠ Stale files detected - run "clean" then "install" to sync');
+            }
+        }
+        catch (e) {
+            console.log('Warning: Could not fetch overlay for validation');
+        }
+        finally {
+            if (existsSync(tempDir)) {
+                rmSync(tempDir, { recursive: true, force: true });
+            }
+        }
+    }
 });
 const pluginCmd = program
     .command('plugin')
