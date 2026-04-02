@@ -384,23 +384,285 @@ pluginCmd
   .command('list')
   .description('List available plugins')
   .action(async () => {
+    const projectRoot = process.cwd();
+    const configPath = join(projectRoot, '.aidd', 'config.json');
+    
     console.log('Available Plugins');
-    console.log('================');
-    console.log('None configured');
+    console.log('================\n');
+    
+    const tool = detectTool(projectRoot);
+    if (!tool) {
+      console.error('Error: No AIDD tool detected');
+      process.exit(1);
+    }
+    
+    if (!existsSync(configPath)) {
+      console.log('No .aidd/config.json found - run install first');
+      return;
+    }
+    
+    let overlayConfig: { repo: string; branch: string } | null = null;
+    let pluginsConfig: Record<string, { installed: boolean }> = {};
+    
+    try {
+      const configContent = readFileSync(configPath, 'utf-8');
+      const config = JSON.parse(configContent);
+      if (config.overlay?.repo) {
+        overlayConfig = {
+          repo: config.overlay.repo,
+          branch: config.overlay.branch || 'main',
+        };
+      }
+      pluginsConfig = config.plugins || {};
+    } catch (e) {
+      console.log('Warning: Could not read .aidd/config.json');
+    }
+    
+    if (!overlayConfig) {
+      console.log('No overlay configured');
+      return;
+    }
+    
+    console.log(`Fetching plugins from ${overlayConfig.repo}...`);
+    
+    const tempDir = join(projectRoot, '.aidd', 'cache', 'plugins-temp');
+    if (existsSync(tempDir)) {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+    mkdirSync(tempDir, { recursive: true });
+    
+    try {
+      const repoUrl = `https://github.com/${overlayConfig.repo}.git`;
+      execSync(`git clone --depth 1 --branch ${overlayConfig.branch} ${repoUrl} "${tempDir}"`, {
+        cwd: projectRoot,
+        stdio: 'pipe',
+      });
+      
+      const pluginsDir = join(tempDir, 'plugins');
+      if (!existsSync(pluginsDir)) {
+        console.log('No plugins directory found in overlay');
+        return;
+      }
+      
+      const pluginDirs = readdirSync(pluginsDir).filter(f => {
+        return existsSync(join(pluginsDir, f, 'plugin.json'));
+      });
+      
+      if (pluginDirs.length === 0) {
+        console.log('No plugins found in overlay');
+        return;
+      }
+      
+      console.log(`Found ${pluginDirs.length} plugin(s):\n`);
+      
+      for (const pluginName of pluginDirs) {
+        const pluginJsonPath = join(pluginsDir, pluginName, 'plugin.json');
+        const pluginData = JSON.parse(readFileSync(pluginJsonPath, 'utf-8'));
+        const isInstalled = pluginsConfig[pluginName]?.installed === true;
+        
+        console.log(`  ${pluginName}`);
+        console.log(`    Description: ${pluginData.description || 'N/A'}`);
+        console.log(`    Status: ${isInstalled ? 'installed' : 'available'}`);
+        console.log('');
+      }
+      
+    } catch (e) {
+      console.error(`Error fetching plugins: ${e}`);
+    } finally {
+      if (existsSync(tempDir)) {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    }
   });
 
 pluginCmd
   .command('add <name>')
   .description('Install a plugin')
   .action(async (name) => {
-    console.log(`Installing plugin: ${name}...`);
+    const projectRoot = process.cwd();
+    const configPath = join(projectRoot, '.aidd', 'config.json');
+    
+    console.log(`Installing plugin: ${name}...\n`);
+    
+    const tool = detectTool(projectRoot);
+    if (!tool) {
+      console.error('Error: No AIDD tool detected');
+      process.exit(1);
+    }
+    
+    if (!existsSync(configPath)) {
+      console.error('No .aidd/config.json found - run install first');
+      return;
+    }
+    
+    let overlayConfig: { repo: string; branch: string } | null = null;
+    let pluginsConfig: Record<string, { installed: boolean }> = {};
+    
+    try {
+      const configContent = readFileSync(configPath, 'utf-8');
+      const config = JSON.parse(configContent);
+      if (config.overlay?.repo) {
+        overlayConfig = {
+          repo: config.overlay.repo,
+          branch: config.overlay.branch || 'main',
+        };
+      }
+      pluginsConfig = config.plugins || {};
+    } catch (e) {
+      console.error('Error reading .aidd/config.json');
+      return;
+    }
+    
+    if (!overlayConfig) {
+      console.error('No overlay configured');
+      return;
+    }
+    
+    const tempDir = join(projectRoot, '.aidd', 'cache', 'plugin-temp');
+    if (existsSync(tempDir)) {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+    mkdirSync(tempDir, { recursive: true });
+    
+    try {
+      const repoUrl = `https://github.com/${overlayConfig.repo}.git`;
+      execSync(`git clone --depth 1 --branch ${overlayConfig.branch} ${repoUrl} "${tempDir}"`, {
+        cwd: projectRoot,
+        stdio: 'pipe',
+      });
+      
+      const pluginDir = join(tempDir, 'plugins', name);
+      if (!existsSync(pluginDir)) {
+        console.error(`Plugin "${name}" not found`);
+        return;
+      }
+      
+      const pluginJsonPath = join(pluginDir, 'plugin.json');
+      if (!existsSync(pluginJsonPath)) {
+        console.error(`Plugin "${name}" has no plugin.json`);
+        return;
+      }
+      
+      const pluginData = JSON.parse(readFileSync(pluginJsonPath, 'utf-8'));
+      console.log(`Installing ${name} v${pluginData.version}`);
+      
+      let installed = 0;
+      
+      const commandsSrc = join(pluginDir, 'commands');
+      if (existsSync(commandsSrc)) {
+        const commandsDest = join(projectRoot, getToolCustomDir(tool));
+        if (!existsSync(commandsDest)) {
+          mkdirSync(commandsDest, { recursive: true });
+        }
+        cpSync(commandsSrc, commandsDest, { recursive: true });
+        console.log(`  Commands installed`);
+        installed++;
+      }
+      
+      const rulesSrc = join(pluginDir, 'rules');
+      if (existsSync(rulesSrc)) {
+        const rulesDest = join(projectRoot, getToolRulesDir(tool));
+        if (!existsSync(rulesDest)) {
+          mkdirSync(rulesDest, { recursive: true });
+        }
+        cpSync(rulesSrc, rulesDest, { recursive: true });
+        console.log(`  Rules installed`);
+        installed++;
+      }
+      
+      const templatesSrc = join(pluginDir, 'templates');
+      if (existsSync(templatesSrc)) {
+        const templatesDest = join(projectRoot, 'aidd_docs', 'templates');
+        if (!existsSync(templatesDest)) {
+          mkdirSync(templatesDest, { recursive: true });
+        }
+        cpSync(templatesSrc, templatesDest, { recursive: true });
+        console.log(`  Templates installed`);
+        installed++;
+      }
+      
+      pluginsConfig[name] = { installed: true };
+      
+      const configContent = readFileSync(configPath, 'utf-8');
+      const config = JSON.parse(configContent);
+      config.plugins = pluginsConfig;
+      writeFileSync(configPath, JSON.stringify(config, null, 2));
+      
+      console.log(`\nPlugin "${name}" installed successfully`);
+      
+    } catch (e) {
+      console.error(`Error installing plugin: ${e}`);
+    } finally {
+      if (existsSync(tempDir)) {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    }
   });
 
 pluginCmd
   .command('remove <name>')
   .description('Remove a plugin')
   .action(async (name) => {
-    console.log(`Removing plugin: ${name}...`);
+    const projectRoot = process.cwd();
+    const configPath = join(projectRoot, '.aidd', 'config.json');
+    
+    console.log(`Removing plugin: ${name}...\n`);
+    
+    const tool = detectTool(projectRoot);
+    if (!tool) {
+      console.error('Error: No AIDD tool detected');
+      process.exit(1);
+    }
+    
+    if (!existsSync(configPath)) {
+      console.error('No .aidd/config.json found');
+      return;
+    }
+    
+    let pluginsConfig: Record<string, { installed: boolean }> = {};
+    
+    try {
+      const configContent = readFileSync(configPath, 'utf-8');
+      const config = JSON.parse(configContent);
+      pluginsConfig = config.plugins || {};
+    } catch (e) {
+      console.error('Error reading .aidd/config.json');
+      return;
+    }
+    
+    if (!pluginsConfig[name]) {
+      console.log(`Plugin "${name}" is not installed`);
+      return;
+    }
+    
+    let removed = 0;
+    
+    const commandsDir = join(projectRoot, getToolCustomDir(tool), name);
+    if (existsSync(commandsDir)) {
+      rmSync(commandsDir, { recursive: true, force: true });
+      console.log(`  Commands removed`);
+      removed++;
+    }
+    
+    const rulesDir = join(projectRoot, getToolRulesDir(tool));
+    const ruleFiles = ['04-agentic-tooling.md', '06-agentic-tests.md', '07-agentic-type-safety.md', '08-agentic-branching.md'];
+    for (const f of ruleFiles) {
+      const rulePath = join(rulesDir, f);
+      if (existsSync(rulePath)) {
+        rmSync(rulePath, { force: true });
+        console.log(`  Rule ${f} removed`);
+        removed++;
+      }
+    }
+    
+    delete pluginsConfig[name];
+    
+    const configContent = readFileSync(configPath, 'utf-8');
+    const config = JSON.parse(configContent);
+    config.plugins = pluginsConfig;
+    writeFileSync(configPath, JSON.stringify(config, null, 2));
+    
+    console.log(`\nPlugin "${name}" removed successfully`);
   });
 
 program.parse();
