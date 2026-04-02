@@ -3,6 +3,8 @@ import * as path from 'path';
 import {
   detectTool,
   detectToolSync,
+  detectAllTools,
+  detectAllToolsSync,
   TOOL_DIRECTORIES,
   ToolType,
 } from '../src/index.js';
@@ -72,5 +74,39 @@ describe('Tool Detection', () => {
     expect(TOOL_DIRECTORIES.copilot).toContain('.github');
     expect(TOOL_DIRECTORIES.cursor).toContain('.cursor');
     expect(TOOL_DIRECTORIES.opencode).toContain('.opencode');
+  });
+});
+
+describe('Detect All Tools', () => {
+  const existsSyncMock = vi.fn();
+
+  it('should return all tools when multiple directories exist', () => {
+    (existsSyncMock as ReturnType<typeof vi.fn>).mockImplementation((filePath: string) => {
+      const p = filePath as string;
+      return p.includes('.claude') || p.includes('.opencode') || p.includes('.cursor');
+    });
+
+    const result = detectAllToolsSync('/test/project', { existsSync: existsSyncMock });
+    expect(result).toContain('claude');
+    expect(result).toContain('opencode');
+    expect(result).toContain('cursor');
+    expect(result).toHaveLength(3);
+  });
+
+  it('should return single tool when only one exists', () => {
+    (existsSyncMock as ReturnType<typeof vi.fn>).mockImplementation((filePath: string) => {
+      const p = filePath as string;
+      return p.includes('.claude');
+    });
+
+    const result = detectAllToolsSync('/test/project', { existsSync: existsSyncMock });
+    expect(result).toEqual(['claude']);
+  });
+
+  it('should return empty array when no tools exist', () => {
+    existsSyncMock.mockReturnValue(false);
+
+    const result = detectAllToolsSync('/test/project', { existsSync: existsSyncMock });
+    expect(result).toHaveLength(0);
   });
 });
