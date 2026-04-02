@@ -3,6 +3,7 @@
 import { Command } from 'commander';
 import {
   detectTool,
+  detectAllTools,
   validateConfig,
   validateManifest,
   validatePluginIndex,
@@ -20,9 +21,56 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, cpSync
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { execSync } from 'child_process';
+import { homedir } from 'os';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+const PACKAGE_ROOT = join(__dirname, '..');
+const GLOBAL_CONFIG_FILE = join(PACKAGE_ROOT, 'config.json');
+
+const DEFAULT_OVERLAY_REPO = 'RebelliousSmile/aidd-claude-custom';
+
+function getGlobalConfig(): { repo: string; branch: string } | null {
+  if (existsSync(GLOBAL_CONFIG_FILE)) {
+    try {
+      const content = readFileSync(GLOBAL_CONFIG_FILE, 'utf-8');
+      const config = JSON.parse(content);
+      if (config.overlay?.repo) {
+        return {
+          repo: config.overlay.repo,
+          branch: config.overlay.branch || 'main',
+        };
+      }
+    } catch (e) {
+      console.error('Warning: Could not read config');
+    }
+  }
+  return null;
+}
+
+function getOverlayConfig(projectRoot: string): { repo: string; branch: string } | null {
+  const configPath = join(projectRoot, 'config', 'global.json');
+  
+  if (existsSync(configPath)) {
+    try {
+      const configContent = readFileSync(configPath, 'utf-8');
+      const config = JSON.parse(configContent);
+      if (config.overlay?.repo) {
+        return {
+          repo: config.overlay.repo,
+          branch: config.overlay.branch || 'main',
+        };
+      }
+    } catch (e) {
+    }
+  }
+  
+  const globalConfig = getGlobalConfig();
+  if (globalConfig) return globalConfig;
+  
+  return { repo: DEFAULT_OVERLAY_REPO, branch: 'main' };
+}
 
 const program = new Command();
 
@@ -32,6 +80,38 @@ program
   .version('1.0.0');
 
 program
+  .command('setup')
+  .description('Configure global overlay repository')
+  .option('-r, --repo <repo>', 'GitHub repository (e.g., username/overlay-repo)')
+  .option('-b, --branch <branch>', 'Branch name', 'main')
+  .action(async (options) => {
+    if (!options.repo) {
+      const globalConfig = getGlobalConfig();
+      if (globalConfig) {
+        console.log('Current configuration:');
+        console.log(`  Repository: ${globalConfig.repo}`);
+        console.log(`  Branch: ${globalConfig.branch}`);
+      } else {
+        console.log('No configuration found.');
+        console.log('Run: aidd-custom setup -r username/overlay-repo');
+      }
+      return;
+    }
+    
+    const config = {
+      overlay: {
+        repo: options.repo,
+        branch: options.branch,
+      },
+    };
+    
+    writeFileSync(GLOBAL_CONFIG_FILE, JSON.stringify(config, null, 2));
+    console.log(`Configuration updated:`);
+    console.log(`  Repository: ${options.repo}`);
+    console.log(`  Branch: ${options.branch}`);
+  });
+
+program
   .command('install')
   .description('Install base overlay and list available plugins')
   .option('--no-overlay', 'Skip base overlay installation')
@@ -39,52 +119,51 @@ program
   .action(async (options) => {
     console.log('Installing aidd-custom overlay...\n');
     
-    const tool = detectTool(process.cwd());
-    if (!tool) {
+    const tools = detectAllTools(process.cwd());
+    if (tools.length === 0) {
       console.error('Error: No AIDD tool detected (.claude, .github, .cursor, .opencode)');
       process.exit(1);
     }
-    console.log(`Detected tool: ${tool}\n`);
+    console.log(`Detected tools: ${tools.join(', ')}\n`);
 
     if (!options.pluginsOnly && !options.noOverlay) {
       const projectRoot = process.cwd();
-      const configPath = join(projectRoot, 'config', 'global.json');
+      const overlayConfig = getOverlayConfig(projectRoot);
       
-      let overlayConfig: { repo: string; branch: string } | null = null;
-      
-      if (existsSync(configPath)) {
-        try {
-          const configContent = readFileSync(configPath, 'utf-8');
-          const config = JSON.parse(configContent);
-          if (config.overlay?.repo) {
-            overlayConfig = {
-              repo: config.overlay.repo,
-              branch: config.overlay.branch || 'main',
-            };
+      if (!overlayConfig) {
+        console.log('No overlay configured. Run: aidd-custom setup or create config/global.json');
+        console.log('Creating tool directories without overlay...\n');
+        for (const tool of tools) {
+          const customDir = getToolCustomDir(tool);
+          const fullPath = join(projectRoot, customDir);
+          if (!existsSync(fullPath)) {
+            mkdirSync(fullPath, { recursive: true });
+            console.log(`Created: ${customDir}`);
           }
-        } catch (e) {
-          console.error('Warning: Could not read config/global.json');
         }
+        return;
       }
       
-      if (overlayConfig) {
-        console.log(`Installing overlay from ${overlayConfig.repo} (branch: ${overlayConfig.branch})`);
+      console.log(`Installing overlay from ${overlayConfig.repo} (branch: ${overlayConfig.branch})`);
+      
+      const tempDir = join(projectRoot, '.cache', 'aidd-custom', 'overlay-temp');
+      if (existsSync(tempDir)) {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+      mkdirSync(tempDir, { recursive: true });
+      
+      try {
+        const repoUrl = `https://github.com/${overlayConfig.repo}.git`;
+        execSync(`git clone --depth 1 --branch ${overlayConfig.branch} ${repoUrl} "${tempDir}"`, {
+          cwd: projectRoot,
+          stdio: 'pipe',
+        });
         
-        const customDir = getToolCustomDir(tool);
-        const fullPath = join(projectRoot, customDir);
-        const tempDir = join(projectRoot, '.cache', 'aidd-custom', 'overlay-temp');
-        
-        if (existsSync(tempDir)) {
-          rmSync(tempDir, { recursive: true, force: true });
-        }
-        mkdirSync(tempDir, { recursive: true });
-        
-        try {
-          const repoUrl = `https://github.com/${overlayConfig.repo}.git`;
-          execSync(`git clone --depth 1 --branch ${overlayConfig.branch} ${repoUrl} "${tempDir}"`, {
-            cwd: projectRoot,
-            stdio: 'pipe',
-          });
+        for (const tool of tools) {
+          console.log(`\n=== Installing for ${tool} ===`);
+          
+          const customDir = getToolCustomDir(tool);
+          const fullPath = join(projectRoot, customDir);
           
           const sourcePath = join(tempDir, 'commands', 'custom');
           if (existsSync(sourcePath)) {
@@ -127,38 +206,32 @@ program
             }
             console.log(`Installed: ${agentsDestPath} (${agentCount} files)`);
           }
-          
-          const templatesSourcePath = join(tempDir, 'templates', 'custom');
-          const templatesDestPath = join(projectRoot, 'aidd_docs', 'templates');
-          if (existsSync(templatesSourcePath)) {
-            if (!existsSync(templatesDestPath)) {
-              mkdirSync(templatesDestPath, { recursive: true });
-            }
-            cpSync(templatesSourcePath, templatesDestPath, { recursive: true });
-            const count = getFileCount(templatesDestPath);
-            console.log(`Installed: templates to aidd_docs/templates (${count} files)`);
-          }
-          
-          rmSync(tempDir, { recursive: true, force: true });
-        } catch (e) {
-          console.error(`Error installing overlay: ${e}`);
-          if (existsSync(tempDir)) {
-            rmSync(tempDir, { recursive: true, force: true });
-          }
         }
-      } else {
-        const customDir = getToolCustomDir(tool);
-        const fullPath = join(projectRoot, customDir);
-        if (!existsSync(fullPath)) {
-          mkdirSync(fullPath, { recursive: true });
-          console.log(`Created: ${customDir}`);
-        } else {
-          console.log(`Already exists: ${customDir}`);
+        
+        const templatesSourcePath = join(tempDir, 'templates', 'custom');
+        const templatesDestPath = join(projectRoot, 'aidd_docs', 'templates', 'custom');
+        if (existsSync(templatesSourcePath)) {
+          if (!existsSync(join(projectRoot, 'aidd_docs', 'templates'))) {
+            mkdirSync(join(projectRoot, 'aidd_docs', 'templates'), { recursive: true });
+          }
+          if (!existsSync(templatesDestPath)) {
+            mkdirSync(templatesDestPath, { recursive: true });
+          }
+          cpSync(templatesSourcePath, templatesDestPath, { recursive: true });
+          const count = getFileCount(templatesDestPath);
+          console.log(`\nInstalled: templates to aidd_docs/templates/custom (${count} files)`);
+        }
+        
+        rmSync(tempDir, { recursive: true, force: true });
+      } catch (e) {
+        console.error(`Error installing overlay: ${e}`);
+        if (existsSync(tempDir)) {
+          rmSync(tempDir, { recursive: true, force: true });
         }
       }
     }
 
-    console.log('Run "aidd-custom plugin list" to see available plugins');
+    console.log('\nRun "aidd-custom plugin list" to see available plugins');
   });
 
 program
@@ -177,29 +250,12 @@ program
     }
     console.log(`Tool: ${tool}`);
     
-    if (!existsSync(configPath)) {
-      console.log('No config/global.json found');
-      return;
-    }
-    
-    let overlayConfig: { repo: string; branch: string } | null = null;
-    try {
-      const configContent = readFileSync(configPath, 'utf-8');
-      const config = JSON.parse(configContent);
-      if (config.overlay?.repo) {
-        overlayConfig = {
-          repo: config.overlay.repo,
-          branch: config.overlay.branch || 'main',
-        };
-      }
-    } catch (e) {
-      console.log('Warning: Could not read config/global.json');
-    }
+    const overlayConfig = getOverlayConfig(projectRoot);
     
     const customDir = getToolCustomDir(tool);
     const rulesDir = getToolRulesDir(tool);
     const agentsDir = join(getToolAgentsDir(tool), 'custom');
-    const templatesDir = 'aidd_docs/templates';
+    const templatesDir = 'aidd_docs/templates/custom';
     
     let cleaned = 0;
     
@@ -254,7 +310,6 @@ program
   .description('Verify installation health (checks for stale files)')
   .action(async () => {
     const projectRoot = process.cwd();
-    const configPath = join(projectRoot, 'config', 'global.json');
     
     console.log('Running health checks...\n');
     
@@ -268,9 +323,12 @@ program
     
     console.log('=== Installation Status ===');
     
-    if (!existsSync(configPath)) {
+    const overlayConfig = getOverlayConfig(projectRoot);
+    const configPath = join(projectRoot, 'config', 'global.json');
+    
+    if (!existsSync(configPath) && !overlayConfig) {
       console.log('Status: NOT INSTALLED');
-      console.log('Run: aidd-custom install');
+      console.log('Run: aidd-custom install or aidd-custom setup');
       return;
     }
     
@@ -279,20 +337,14 @@ program
     const agentsDir = getToolAgentsDir(tool);
     const templatesDir = 'aidd_docs/templates';
     
-    let overlayConfig: { repo: string; branch: string } | null = null;
     let pluginsConfig: Record<string, { installed: boolean }> = {};
-    try {
-      const configContent = readFileSync(configPath, 'utf-8');
-      const config = JSON.parse(configContent);
-      if (config.overlay?.repo) {
-        overlayConfig = {
-          repo: config.overlay.repo,
-          branch: config.overlay.branch || 'main',
-        };
+    if (existsSync(configPath)) {
+      try {
+        const configContent = readFileSync(configPath, 'utf-8');
+        const config = JSON.parse(configContent);
+        pluginsConfig = config.plugins || {};
+      } catch (e) {
       }
-      pluginsConfig = config.plugins || {};
-    } catch (e) {
-      console.log('Warning: Could not read config/global.json');
     }
     
     const checks = [
@@ -416,30 +468,20 @@ pluginCmd
       process.exit(1);
     }
     
-    if (!existsSync(configPath)) {
-      console.log('No config/global.json found - run install first');
-      return;
-    }
+    const overlayConfig = getOverlayConfig(projectRoot);
     
-    let overlayConfig: { repo: string; branch: string } | null = null;
     let pluginsConfig: Record<string, { installed: boolean }> = {};
-    
-    try {
-      const configContent = readFileSync(configPath, 'utf-8');
-      const config = JSON.parse(configContent);
-      if (config.overlay?.repo) {
-        overlayConfig = {
-          repo: config.overlay.repo,
-          branch: config.overlay.branch || 'main',
-        };
+    if (existsSync(configPath)) {
+      try {
+        const configContent = readFileSync(configPath, 'utf-8');
+        const config = JSON.parse(configContent);
+        pluginsConfig = config.plugins || {};
+      } catch (e) {
       }
-      pluginsConfig = config.plugins || {};
-    } catch (e) {
-      console.log('Warning: Could not read config/global.json');
     }
     
     if (!overlayConfig) {
-      console.log('No overlay configured');
+      console.log('No overlay configured. Run: aidd-custom setup');
       return;
     }
     
@@ -510,32 +552,21 @@ pluginCmd
       process.exit(1);
     }
     
-    if (!existsSync(configPath)) {
-      console.error('No config/global.json found - run install first');
-      return;
-    }
-    
-    let overlayConfig: { repo: string; branch: string } | null = null;
-    let pluginsConfig: Record<string, { installed: boolean }> = {};
-    
-    try {
-      const configContent = readFileSync(configPath, 'utf-8');
-      const config = JSON.parse(configContent);
-      if (config.overlay?.repo) {
-        overlayConfig = {
-          repo: config.overlay.repo,
-          branch: config.overlay.branch || 'main',
-        };
-      }
-      pluginsConfig = config.plugins || {};
-    } catch (e) {
-      console.error('Error reading config/global.json');
-      return;
-    }
+    const overlayConfig = getOverlayConfig(projectRoot);
     
     if (!overlayConfig) {
-      console.error('No overlay configured');
+      console.error('No overlay configured. Run: aidd-custom setup');
       return;
+    }
+    
+    let pluginsConfig: Record<string, { installed: boolean }> = {};
+    if (existsSync(configPath)) {
+      try {
+        const configContent = readFileSync(configPath, 'utf-8');
+        const config = JSON.parse(configContent);
+        pluginsConfig = config.plugins || {};
+      } catch (e) {
+      }
     }
     
     const tempDir = join(projectRoot, '.cache', 'aidd-custom', 'plugin-temp');
@@ -638,7 +669,6 @@ pluginCmd
   .description('Remove a plugin (only removes files installed via plugin add)')
   .action(async (name) => {
     const projectRoot = process.cwd();
-    const configPath = join(projectRoot, 'config', 'global.json');
     
     console.log(`Removing plugin: ${name}...\n`);
     
@@ -648,27 +678,22 @@ pluginCmd
       process.exit(1);
     }
     
-    if (!existsSync(configPath)) {
-      console.error('No config/global.json found');
+    const overlayConfig = getOverlayConfig(projectRoot);
+    const configPath = join(projectRoot, 'config', 'global.json');
+    
+    if (!overlayConfig && !existsSync(configPath)) {
+      console.error('No configuration found. Run: aidd-custom setup');
       return;
     }
     
-    let overlayConfig: { repo: string; branch: string } | null = null;
     let pluginsConfig: Record<string, { installed: boolean; files?: string[] }> = {};
-    
-    try {
-      const configContent = readFileSync(configPath, 'utf-8');
-      const config = JSON.parse(configContent);
-      if (config.overlay?.repo) {
-        overlayConfig = {
-          repo: config.overlay.repo,
-          branch: config.overlay.branch || 'main',
-        };
+    if (existsSync(configPath)) {
+      try {
+        const configContent = readFileSync(configPath, 'utf-8');
+        const config = JSON.parse(configContent);
+        pluginsConfig = config.plugins || {};
+      } catch (e) {
       }
-      pluginsConfig = config.plugins || {};
-    } catch (e) {
-      console.error('Error reading config/global.json');
-      return;
     }
     
     if (!pluginsConfig[name]) {

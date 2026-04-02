@@ -38,6 +38,27 @@ export function detectTool(basePath: string): ToolType | null {
 }
 
 /**
+ * Detect all AIDD tools present in the directory
+ */
+export function detectAllTools(basePath: string): ToolType[] {
+  const tools: ToolType[] = [];
+  for (const [tool, dirs] of Object.entries(TOOL_DIRECTORIES)) {
+    const toolType = tool as ToolType;
+    const exists = dirs.some((dir) => {
+      try {
+        return existsSync(join(basePath, dir));
+      } catch {
+        return false;
+      }
+    });
+    if (exists) {
+      tools.push(toolType);
+    }
+  }
+  return tools;
+}
+
+/**
  * Detect tool synchronously with passed fs module (for testing)
  */
 export function detectToolSync(basePath: string, fsModule: { existsSync: typeof import('fs')['existsSync'] }): ToolType | null {
