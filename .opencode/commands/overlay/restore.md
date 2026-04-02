@@ -1,14 +1,14 @@
 ---
-name: 'aidd:custom:restore'
+name: 'aidd:overlay:restore'
 description: 'Restore plugin files from backup'
 argument-hint: '<plugin-name>'
 ---
 
-# Custom Restore
+# Overlay Restore
 
 ## Goal
 
-List and restore files from plugin backups.
+List and restore files from overlay/plugin backups.
 
 ## Rules
 
@@ -27,13 +27,13 @@ List and restore files from plugin backups.
 ### Step 1: Detect AIDD Tool
 
 1. Extract plugin name from arguments
-2. Read `.aidd-custom/manifest.json`
+2. Read `.aidd-overlay/manifest.json`
 3. Read tool from manifest
 4. Verify plugin was ever installed
 
 ### Step 2: List Available Backups
 
-1. Scan `.aidd-custom/backups/<plugin>/`
+1. Scan `.aidd-overlay/backups/<plugin>/`
 2. Build backup list with timestamps:
    ```
    Available Backups for '<plugin>' (<tool>)

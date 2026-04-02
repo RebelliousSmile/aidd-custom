@@ -1,13 +1,13 @@
 ---
-name: 'aidd:custom:doctor'
-description: 'Verify custom plugin installation health'
+name: 'aidd:overlay:doctor'
+description: 'Verify overlay installation health'
 ---
 
-# Custom Doctor
+# Overlay Doctor
 
 ## Goal
 
-Check the health of the custom plugin installation and report any issues.
+Check the health of the overlay installation and report any issues.
 
 ## Rules
 
@@ -34,13 +34,13 @@ Check the health of the custom plugin installation and report any issues.
 
 ### Step 4: Check Manifest
 
-1. Read `.aidd-custom/manifest.json`
+1. Read `.aidd-overlay/manifest.json`
 2. Verify valid JSON
 3. Verify required fields exist (tool, plugins, files)
 
 ### Step 5: Check Repository Cache
 
-1. Verify cached repo exists at `~/.cache/aidd-custom/`
+1. Verify cached repo exists at `~/.cache/aidd-overlay/`
 2. Verify repo is accessible
 
 ### Step 6: Check Installed Files

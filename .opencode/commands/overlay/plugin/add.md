@@ -1,14 +1,14 @@
 ---
-name: 'aidd:custom:plugin:add'
-description: 'Install a specific custom plugin'
+name: 'aidd:overlay:plugin:add'
+description: 'Install a specific optional plugin'
 argument-hint: '<plugin-name>'
 ---
 
-# Custom Plugin Add
+# Overlay Plugin Add
 
 ## Goal
 
-Install a single named plugin from the custom repository.
+Install a single named optional plugin from the repository.
 
 ## Rules
 
@@ -38,7 +38,7 @@ Install a single named plugin from the custom repository.
 
 ### Step 3: Check Installation Status
 
-1. Read `.aidd-custom/manifest.json`
+1. Read `.aidd-overlay/manifest.json`
 2. Check if plugin already installed
 3. If installed, confirm overwrite or exit
 

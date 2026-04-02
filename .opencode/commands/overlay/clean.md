@@ -1,13 +1,13 @@
 ---
-name: 'aidd:custom:clean'
-description: 'Remove all custom plugin files and manifest'
+name: 'aidd:overlay:clean'
+description: 'Remove all overlay files and manifest'
 ---
 
-# Custom Clean
+# Overlay Clean
 
 ## Goal
 
-Remove all custom plugin-related files and configuration from the project.
+Remove all overlay and plugin files from the project.
 
 ## Rules
 
@@ -23,7 +23,7 @@ Remove all custom plugin-related files and configuration from the project.
 
 ### Step 2: Check Installation
 
-1. Read `.aidd-custom/manifest.json`
+1. Read `.aidd-overlay/manifest.json`
 2. Exit with message if no custom plugins installed
 
 ### Step 3: List Files to Delete
@@ -34,14 +34,14 @@ Remove all custom plugin-related files and configuration from the project.
    Files to be removed from <tool>:
    ==================================
    
-   .aidd-custom/manifest.json          |  1.2 KB
+   .aidd-overlay/manifest.json          |  1.2 KB
    commands/<tool>/custom/...          |  5.4 KB
    rules/custom/...                    | 12.8 KB
    agents/custom/...                   |  2.1 KB
    
    Total: 21.5 KB in 15 files
    
-   Backups in .aidd-custom/backups/ will be kept (30 day retention).
+   Backups in .aidd-overlay/backups/ will be kept (30 day retention).
    ```
 
 ### Step 4: Confirm Deletion
@@ -58,8 +58,8 @@ Remove all custom plugin-related files and configuration from the project.
 
 1. Delete plugin files from custom directories
 2. Delete empty parent directories within custom dirs
-3. Delete `.aidd-custom/manifest.json`
-4. Keep `.aidd-custom/backups/` directory
+3. Delete `.aidd-overlay/manifest.json`
+4. Keep `.aidd-overlay/backups/` directory
 
 ### Step 6: Report
 

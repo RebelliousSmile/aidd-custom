@@ -1,14 +1,14 @@
 ---
-name: 'aidd:custom:plugin:remove'
-description: 'Remove an installed custom plugin'
+name: 'aidd:overlay:plugin:remove'
+description: 'Remove an installed optional plugin'
 argument-hint: '<plugin-name> [--force]'
 ---
 
-# Custom Plugin Remove
+# Overlay Plugin Remove
 
 ## Goal
 
-Remove an installed plugin and its files from the project.
+Remove an installed optional plugin and its files from the project.
 
 ## Rules
 
@@ -35,7 +35,7 @@ Remove an installed plugin and its files from the project.
 ### Step 2: Validate Plugin Name
 
 1. Extract plugin name from arguments
-2. Read `.aidd-custom/manifest.json`
+2. Read `.aidd-overlay/manifest.json`
 3. Verify plugin is installed
 4. Exit with error if not installed
 
@@ -69,4 +69,4 @@ Remove an installed plugin and its files from the project.
 
 1. Display removal summary with tool name
 2. Show files deleted
-3. Point to `.aidd-custom/backups/` for restore instructions
+3. Point to `.aidd-overlay/backups/` for restore instructions

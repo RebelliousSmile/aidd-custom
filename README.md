@@ -1,39 +1,50 @@
 # AIDD Custom Framework
 
-Custom AIDD (AI-Driven Development) starter with custom plugin system.
+Custom AIDD (AI-Driven Development) starter with overlay system.
+
+## Two-Layer System
+
+### 1. Base Overlay (always installed)
+Files from `overlay/` directory installed on every `aidd install`.
+
+### 2. Optional Plugins
+Additional packages from `plugins/` that can be installed/removed.
 
 ## Structure
 
 ```
 .
 ├── .aidd/
-│   └── config.json     # Custom plugin configuration
+│   └── config.json     # Configuration (repo, branch)
 ├── .opencode/
-│   └── commands/custom/ # Custom plugin commands
+│   └── commands/overlay/ # Overlay commands
+├── overlay/             # Base files (commands, rules, agents, skills)
+├── plugins/             # Optional plugins
 ├── opencode.json
 └── AGENTS.md
 ```
 
-## Custom Plugin Commands
+## Overlay Commands
 
 ```text
-aidd:custom:install          # Install plugins from private repo
-aidd:custom:update           # Check and apply plugin updates
-aidd:custom:clean            # Remove all plugin files
-aidd:custom:doctor           # Verify installation health
-aidd:custom:restore          # Restore files from backup
-aidd:custom:plugin:list      # List available plugins
-aidd:custom:plugin:add       # Install a specific plugin
-aidd:custom:plugin:remove    # Remove a plugin
+aidd:overlay:install     # Install base overlay + list plugins
+aidd:overlay:update      # Check overlay/plugin updates
+aidd:overlay:clean       # Remove all overlay files
+aidd:overlay:doctor      # Verify installation health
+aidd:overlay:restore      # Restore files from backup
+
+aidd:overlay:plugin:list     # List available plugins
+aidd:overlay:plugin:add       # Install a plugin
+aidd:overlay:plugin:remove    # Remove a plugin
 ```
 
 ## Tool Detection
 
-The system auto-detects your AIDD tool and installs plugins to the correct directories:
+Auto-detects AIDD tool and installs to correct directories:
 
 | Tool | Directory | Commands | Rules | Agents | Skills |
 |------|----------|----------|-------|--------|--------|
-| Claude Code | `.claude/` | `commands/custom/` | `rules/custom/` | `agents/custom/` | `skills/custom/` |
+| Claude | `.claude/` | `commands/custom/` | `rules/custom/` | `agents/custom/` | `skills/custom/` |
 | Copilot | `.github/` | `prompts/custom/` | `instructions/custom/` | `agents/custom/` | `skills/custom/` |
 | Cursor | `.cursor/` | `commands/custom/` | `rules/custom/` | `agents/custom/` | `skills/custom/` |
 | OpenCode | `.opencode/` | `commands/custom/` | `rules/custom/` | `agents/custom/` | `skills/custom/` |
@@ -44,30 +55,35 @@ Edit `.aidd/config.json`:
 
 ```json
 {
-  "custom": {
+  "overlay": {
     "repo": "owner/private-repo",
     "branch": "main"
   }
 }
 ```
 
-## Plugin Structure
-
-Plugins should be organized as:
+## Repository Structure
 
 ```
-plugins/
-├── index.json        # Plugin manifest
-├── version.txt       # Version number
-├── commands/        # Slash commands
-├── rules/            # Coding rules
-├── agents/           # Specialized agents
-└── skills/           # Custom skills
+private-repo/
+├── overlay/           # Base files (always installed)
+│   ├── commands/
+│   ├── rules/
+│   ├── agents/
+│   └── skills/
+├── plugins/          # Optional plugins
+│   ├── my-plugin-1/
+│   │   ├── version.txt
+│   │   ├── index.json
+│   │   └── ...
+│   └── index.json   # Plugin list
+└── README.md
 ```
 
 ## Getting Started
 
-1. Clone this repository into your AIDD project
-2. Run `aidd install` to install framework files
-3. Configure custom repo in `.aidd/config.json`
-4. Use `aidd:custom:plugin list` to see available plugins
+1. Clone this repository
+2. Run `aidd install` to install framework
+3. Overlay files are auto-installed
+4. Use `aidd:overlay:plugin list` to see optional plugins
+5. Use `aidd:overlay:plugin add <name>` to install a plugin
