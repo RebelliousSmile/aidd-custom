@@ -292,7 +292,8 @@ program
     const customDir = getToolCustomDir(tool);
     const rulesDir = getToolRulesDir(tool);
     const agentsDir = getToolAgentsDir(tool);
-    const templatesDir = 'aidd_docs/templates';
+    const templatesDir = 'aidd_docs/templates/custom';
+    const templatesDirOverlay = 'aidd_docs/templates';
     
     let pluginsConfig: Record<string, { installed: boolean }> = {};
     if (existsSync(configPath)) {
