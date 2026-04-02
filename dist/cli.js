@@ -519,7 +519,7 @@ pluginCmd
 });
 pluginCmd
     .command('remove <name>')
-    .description('Remove a plugin')
+    .description('Remove a plugin (only removes files installed via plugin add)')
     .action(async (name) => {
     const projectRoot = process.cwd();
     const configPath = join(projectRoot, '.aidd', 'config.json');
@@ -533,10 +533,17 @@ pluginCmd
         console.error('No .aidd/config.json found');
         return;
     }
+    let overlayConfig = null;
     let pluginsConfig = {};
     try {
         const configContent = readFileSync(configPath, 'utf-8');
         const config = JSON.parse(configContent);
+        if (config.overlay?.repo) {
+            overlayConfig = {
+                repo: config.overlay.repo,
+                branch: config.overlay.branch || 'main',
+            };
+        }
         pluginsConfig = config.plugins || {};
     }
     catch (e) {
@@ -547,29 +554,82 @@ pluginCmd
         console.log(`Plugin "${name}" is not installed`);
         return;
     }
-    let removed = 0;
-    const commandsDir = join(projectRoot, getToolCustomDir(tool), name);
-    if (existsSync(commandsDir)) {
-        rmSync(commandsDir, { recursive: true, force: true });
-        console.log(`  Commands removed`);
-        removed++;
+    console.log('Removing plugin files (installed via plugin add)...');
+    const tempDir = join(projectRoot, '.aidd', 'cache', 'plugin-temp-remove');
+    if (existsSync(tempDir)) {
+        rmSync(tempDir, { recursive: true, force: true });
     }
-    const rulesDir = join(projectRoot, getToolRulesDir(tool));
-    const ruleFiles = ['04-agentic-tooling.md', '06-agentic-tests.md', '07-agentic-type-safety.md', '08-agentic-branching.md'];
-    for (const f of ruleFiles) {
-        const rulePath = join(rulesDir, f);
-        if (existsSync(rulePath)) {
-            rmSync(rulePath, { force: true });
-            console.log(`  Rule ${f} removed`);
-            removed++;
+    mkdirSync(tempDir, { recursive: true });
+    try {
+        if (overlayConfig) {
+            const repoUrl = `https://github.com/${overlayConfig.repo}.git`;
+            execSync(`git clone --depth 1 --branch ${overlayConfig.branch} ${repoUrl} "${tempDir}"`, {
+                cwd: projectRoot,
+                stdio: 'pipe',
+            });
+            const pluginDir = join(tempDir, 'plugins', name);
+            if (!existsSync(join(pluginDir, 'plugin.json'))) {
+                console.error(`Plugin "${name}" not found in overlay`);
+                return;
+            }
+            const pluginData = JSON.parse(readFileSync(join(pluginDir, 'plugin.json'), 'utf-8'));
+            const commandsSrc = join(pluginDir, 'commands');
+            if (existsSync(commandsSrc)) {
+                const commandsDest = join(projectRoot, getToolCustomDir(tool));
+                const copyRecursive = (src, dest, action) => {
+                    if (!existsSync(src))
+                        return;
+                    const items = readdirSync(src);
+                    for (const item of items) {
+                        const srcPath = join(src, item);
+                        const destPath = join(dest, item);
+                        if (statSync(srcPath).isDirectory()) {
+                            if (!existsSync(destPath)) {
+                                mkdirSync(destPath, { recursive: true });
+                            }
+                            copyRecursive(srcPath, destPath, action);
+                        }
+                        else {
+                            if (action === 'remove' && existsSync(destPath)) {
+                                rmSync(destPath, { force: true });
+                                console.log(`  Removed: commands/${name}/${item}`);
+                            }
+                        }
+                    }
+                };
+                copyRecursive(commandsSrc, commandsDest, 'remove');
+            }
+            const rulesSrc = join(pluginDir, 'rules');
+            if (existsSync(rulesSrc)) {
+                const rulesDest = join(projectRoot, getToolRulesDir(tool));
+                const ruleFiles = readdirSync(rulesSrc).filter(f => f.endsWith('.md'));
+                for (const f of ruleFiles) {
+                    const rulePath = join(rulesDest, f);
+                    if (existsSync(rulePath)) {
+                        rmSync(rulePath, { force: true });
+                        console.log(`  Removed: rules/${f}`);
+                    }
+                }
+            }
+            // Note: templates are not removed to avoid deleting overlay files
+            // Templates from plugins and overlay are merged in the same folder
+            console.log(`  Note: templates were not removed (may overlap with overlay)`);
+        }
+        delete pluginsConfig[name];
+        const configContent = readFileSync(configPath, 'utf-8');
+        const config = JSON.parse(configContent);
+        config.plugins = pluginsConfig;
+        writeFileSync(configPath, JSON.stringify(config, null, 2));
+        console.log(`\nPlugin "${name}" removed successfully`);
+    }
+    catch (e) {
+        console.error(`Error removing plugin: ${e}`);
+    }
+    finally {
+        if (existsSync(tempDir)) {
+            rmSync(tempDir, { recursive: true, force: true });
         }
     }
-    delete pluginsConfig[name];
-    const configContent = readFileSync(configPath, 'utf-8');
-    const config = JSON.parse(configContent);
-    config.plugins = pluginsConfig;
-    writeFileSync(configPath, JSON.stringify(config, null, 2));
-    console.log(`\nPlugin "${name}" removed successfully`);
 });
 program.parse();
 //# sourceMappingURL=cli.js.map
