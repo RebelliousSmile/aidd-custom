@@ -364,4 +364,8 @@ export declare function transformPath(sourcePath: string, tool: ToolType): strin
  * Get the custom directory for a tool
  */
 export declare function getToolCustomDir(tool: ToolType): string;
+/**
+ * Get the custom rules directory for a tool
+ */
+export declare function getToolRulesDir(tool: ToolType): string;
 //# sourceMappingURL=index.d.ts.map

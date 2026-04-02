@@ -220,3 +220,16 @@ export function getToolCustomDir(tool: ToolType): string {
   };
   return dirs[tool];
 }
+
+/**
+ * Get the custom rules directory for a tool
+ */
+export function getToolRulesDir(tool: ToolType): string {
+  const dirs: Record<ToolType, string> = {
+    claude: '.claude/rules/custom',
+    copilot: '.github/instructions',
+    cursor: '.cursor/rules',
+    opencode: '.opencode/rules',
+  };
+  return dirs[tool];
+}

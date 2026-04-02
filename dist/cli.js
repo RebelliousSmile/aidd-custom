@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
-import { detectTool, getToolCustomDir, } from './index.js';
-import { existsSync, mkdirSync } from 'fs';
+import { detectTool, getToolCustomDir, getToolRulesDir, } from './index.js';
+import { readFileSync, existsSync, mkdirSync, cpSync, rmSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { execSync } from 'child_process';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const program = new Command();
@@ -25,14 +26,87 @@ program
     }
     console.log(`Detected tool: ${tool}\n`);
     if (!options.pluginsOnly && !options.noOverlay) {
-        const customDir = getToolCustomDir(tool);
-        const fullPath = join(process.cwd(), customDir);
-        if (!existsSync(fullPath)) {
-            mkdirSync(fullPath, { recursive: true });
-            console.log(`Created: ${customDir}`);
+        const projectRoot = process.cwd();
+        const configPath = join(projectRoot, '.aidd', 'config.json');
+        let overlayConfig = null;
+        if (existsSync(configPath)) {
+            try {
+                const configContent = readFileSync(configPath, 'utf-8');
+                const config = JSON.parse(configContent);
+                if (config.overlay?.repo) {
+                    overlayConfig = {
+                        repo: config.overlay.repo,
+                        branch: config.overlay.branch || 'main',
+                    };
+                }
+            }
+            catch (e) {
+                console.error('Warning: Could not read .aidd/config.json');
+            }
+        }
+        if (overlayConfig) {
+            console.log(`Installing overlay from ${overlayConfig.repo} (branch: ${overlayConfig.branch})`);
+            const customDir = getToolCustomDir(tool);
+            const fullPath = join(projectRoot, customDir);
+            const tempDir = join(projectRoot, '.aidd', 'cache', 'overlay-temp');
+            if (existsSync(tempDir)) {
+                rmSync(tempDir, { recursive: true, force: true });
+            }
+            mkdirSync(tempDir, { recursive: true });
+            try {
+                const repoUrl = `https://github.com/${overlayConfig.repo}.git`;
+                execSync(`git clone --depth 1 --branch ${overlayConfig.branch} ${repoUrl} "${tempDir}"`, {
+                    cwd: projectRoot,
+                    stdio: 'pipe',
+                });
+                const sourcePath = join(tempDir, 'commands', 'custom');
+                if (existsSync(sourcePath)) {
+                    if (!existsSync(fullPath)) {
+                        mkdirSync(fullPath, { recursive: true });
+                    }
+                    cpSync(sourcePath, fullPath, { recursive: true });
+                    console.log(`Installed: ${customDir}`);
+                }
+                else {
+                    console.log(`Warning: commands/custom not found in overlay`);
+                }
+                const rulesSourcePath = join(tempDir, 'rules', 'custom');
+                const rulesDestPath = join(projectRoot, getToolRulesDir(tool));
+                if (existsSync(rulesSourcePath)) {
+                    if (!existsSync(rulesDestPath)) {
+                        mkdirSync(rulesDestPath, { recursive: true });
+                    }
+                    cpSync(rulesSourcePath, rulesDestPath, { recursive: true });
+                    console.log(`Installed: ${rulesDestPath}`);
+                }
+                const templatesSourcePath = join(tempDir, 'templates', 'custom');
+                const templatesDestPath = join(projectRoot, 'aidd_docs', 'templates');
+                if (existsSync(templatesSourcePath)) {
+                    if (!existsSync(templatesDestPath)) {
+                        mkdirSync(templatesDestPath, { recursive: true });
+                    }
+                    cpSync(templatesSourcePath, templatesDestPath, { recursive: true });
+                    console.log(`Installed: templates to aidd_docs/templates`);
+                }
+                rmSync(tempDir, { recursive: true, force: true });
+            }
+            catch (e) {
+                console.error(`Error installing overlay: ${e}`);
+                if (existsSync(tempDir)) {
+                    rmSync(tempDir, { recursive: true, force: true });
+                }
+            }
         }
         else {
-            console.log(`Already exists: ${customDir}`);
+            const customDir = getToolCustomDir(tool);
+            const fullPath = join(projectRoot, customDir);
+            if (!existsSync(fullPath)) {
+                mkdirSync(fullPath, { recursive: true });
+                console.log(`Created: ${customDir}`);
+            }
+            else {
+                console.log(`Already exists: ${customDir}`);
+            }
         }
     }
     console.log('Available plugins: none (configure in .aidd/config.json)');

@@ -181,4 +181,16 @@ export function getToolCustomDir(tool) {
     };
     return dirs[tool];
 }
+/**
+ * Get the custom rules directory for a tool
+ */
+export function getToolRulesDir(tool) {
+    const dirs = {
+        claude: '.claude/rules/custom',
+        copilot: '.github/instructions',
+        cursor: '.cursor/rules',
+        opencode: '.opencode/rules',
+    };
+    return dirs[tool];
+}
 //# sourceMappingURL=index.js.map
