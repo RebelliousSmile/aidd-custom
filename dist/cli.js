@@ -479,6 +479,19 @@ pluginCmd
             console.log(`  Rules installed`);
             installed++;
         }
+        const agentsSrc = join(pluginDir, 'agents');
+        if (existsSync(agentsSrc)) {
+            const agentsDest = join(projectRoot, getToolAgentsDir(tool), 'custom');
+            if (!existsSync(agentsDest)) {
+                mkdirSync(agentsDest, { recursive: true });
+            }
+            const files = readdirSync(agentsSrc).filter(f => f.endsWith('.md'));
+            for (const file of files) {
+                cpSync(join(agentsSrc, file), join(agentsDest, file), { recursive: true });
+            }
+            console.log(`  Agents installed`);
+            installed++;
+        }
         const templatesSrc = join(pluginDir, 'templates');
         if (existsSync(templatesSrc)) {
             const templatesDest = join(projectRoot, 'aidd_docs', 'templates');
@@ -596,6 +609,18 @@ pluginCmd
                     if (existsSync(rulePath)) {
                         rmSync(rulePath, { force: true });
                         console.log(`  Removed: rules/${f}`);
+                    }
+                }
+            }
+            const agentsSrc = join(pluginDir, 'agents');
+            if (existsSync(agentsSrc)) {
+                const agentsDest = join(projectRoot, getToolAgentsDir(tool), 'custom');
+                const agentFiles = readdirSync(agentsSrc).filter(f => f.endsWith('.md'));
+                for (const f of agentFiles) {
+                    const agentPath = join(agentsDest, f);
+                    if (existsSync(agentPath)) {
+                        rmSync(agentPath, { force: true });
+                        console.log(`  Removed: agents/${f}`);
                     }
                 }
             }

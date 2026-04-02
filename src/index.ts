@@ -274,6 +274,7 @@ export function getFileCount(dirPath: string): number {
 export interface PluginCounts {
   commands: number;
   rules: number;
+  agents: number;
   templates: number;
 }
 
@@ -281,6 +282,7 @@ export function getPluginCounts(pluginDir: string): PluginCounts {
   return {
     commands: getFileCount(join(pluginDir, 'commands')),
     rules: getFileCount(join(pluginDir, 'rules')),
+    agents: getFileCount(join(pluginDir, 'agents')),
     templates: getFileCount(join(pluginDir, 'templates')),
   };
 }
@@ -321,7 +323,7 @@ export function validateOverlaySync(
   const categories = [
     { key: 'commands', name: 'Commands', pluginKey: 'commands' as const },
     { key: 'rules', name: 'Rules', pluginKey: 'rules' as const },
-    { key: 'agents', name: 'Agents', pluginKey: null },
+    { key: 'agents', name: 'Agents', pluginKey: 'agents' as const },
     { key: 'templates', name: 'Templates', pluginKey: 'templates' as const },
   ];
 
@@ -336,10 +338,23 @@ export function validateOverlaySync(
     if (cat.pluginKey) {
       for (const pluginName of installedPlugins) {
         const pluginDir = join(pluginsDir, pluginName);
-        pluginExtra += getPluginCounts(pluginDir)[cat.pluginKey];
+        const pluginCount = getPluginCounts(pluginDir)[cat.pluginKey];
+        
+        if (cat.key === 'templates') {
+          const overlayFiles = new Set(
+            readdirSync(overlayPaths.templates).filter(f => f.endsWith('.md'))
+          );
+          const pluginFiles = existsSync(join(pluginDir, 'templates')) 
+            ? readdirSync(join(pluginDir, 'templates')).filter(f => f.endsWith('.md'))
+            : [];
+          const uniqueFromPlugin = pluginFiles.filter(f => !overlayFiles.has(f));
+          pluginExtra += uniqueFromPlugin.length;
+        } else {
+          pluginExtra += pluginCount;
+        }
       }
     }
-
+    
     const expectedCount = overlayCount + pluginExtra;
     
     if (localCount !== expectedCount && localCount > 0) {

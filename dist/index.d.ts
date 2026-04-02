@@ -382,6 +382,7 @@ export declare function getFileCount(dirPath: string): number;
 export interface PluginCounts {
     commands: number;
     rules: number;
+    agents: number;
     templates: number;
 }
 export declare function getPluginCounts(pluginDir: string): PluginCounts;
