@@ -40,10 +40,10 @@ export function detectTool(basePath: string): ToolType | null {
 /**
  * Detect tool synchronously with passed fs module (for testing)
  */
-export function detectToolSync(basePath: string, fs: typeof import('fs')): ToolType | null {
+export function detectToolSync(basePath: string, fsModule: { existsSync: typeof import('fs')['existsSync'] }): ToolType | null {
   for (const [tool, dirs] of Object.entries(TOOL_DIRECTORIES)) {
     const toolType = tool as ToolType;
-    const exists = dirs.some((dir) => fs.existsSync(require('path').join(basePath, dir)));
+    const exists = dirs.some((dir) => fsModule.existsSync(require('path').join(basePath, dir)));
     if (exists) {
       return toolType;
     }

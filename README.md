@@ -2,6 +2,40 @@
 
 Custom AIDD (AI-Driven Development) starter with overlay system.
 
+## Installation
+
+### As CLI (global)
+
+```bash
+# Clone and build
+git clone https://github.com/your-org/aidd-custom.git
+cd aidd-custom
+npm install
+npm run build
+
+# Link globally
+npm link
+```
+
+Now you can use `aidd-custom` globally:
+
+```bash
+aidd-custom --help
+aidd-custom install
+aidd-custom update
+aidd-custom clean
+aidd-custom doctor
+aidd-custom plugin list
+aidd-custom plugin add <name>
+aidd-custom plugin remove <name>
+```
+
+### As library
+
+```bash
+npm install aidd-custom
+```
+
 ## Two-Layer System
 
 ### 1. Base Overlay (always installed)
@@ -27,14 +61,14 @@ Additional packages from `plugins/` that can be installed/removed.
 ## Overlay Commands
 
 ```text
-aidd:overlay:install     # Install base overlay + list plugins
-aidd:overlay:update      # Check overlay/plugin updates
-aidd:overlay:clean       # Remove all overlay files
-aidd:overlay:doctor      # Verify installation health
+aidd-custom install      # Install base overlay + list plugins
+aidd-custom update       # Check overlay/plugin updates
+aidd-custom clean        # Remove all overlay files
+aidd-custom doctor       # Verify installation health
 
-aidd:overlay:plugin:list     # List available plugins
-aidd:overlay:plugin:add       # Install a plugin
-aidd:overlay:plugin:remove    # Remove a plugin
+aidd-custom plugin list     # List available plugins
+aidd-custom plugin add     # Install a plugin
+aidd-custom plugin remove  # Remove a plugin
 ```
 
 ## Tool Detection
@@ -78,11 +112,3 @@ private-repo/
 │   └── index.json   # Plugin list
 └── README.md
 ```
-
-## Getting Started
-
-1. Clone this repository
-2. Run `aidd install` to install framework
-3. Overlay files are auto-installed
-4. Use `aidd:overlay:plugin list` to see optional plugins
-5. Use `aidd:overlay:plugin add <name>` to install a plugin
