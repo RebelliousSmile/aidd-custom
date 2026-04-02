@@ -72,7 +72,7 @@ program
         
         const customDir = getToolCustomDir(tool);
         const fullPath = join(projectRoot, customDir);
-        const tempDir = join(projectRoot, '.aidd', 'cache', 'overlay-temp');
+        const tempDir = join(projectRoot, '.cache', 'aidd-custom', 'overlay-temp');
         
         if (existsSync(tempDir)) {
           rmSync(tempDir, { recursive: true, force: true });
@@ -328,7 +328,7 @@ program
       console.log('\n=== File Count Validation ===');
       console.log('Fetching overlay to compare counts...\n');
       
-      const tempDir = join(projectRoot, '.aidd', 'cache', 'doctor-temp');
+      const tempDir = join(projectRoot, '.cache', 'aidd-custom', 'doctor-temp');
       if (existsSync(tempDir)) {
         rmSync(tempDir, { recursive: true, force: true });
       }
@@ -445,7 +445,7 @@ pluginCmd
     
     console.log(`Fetching plugins from ${overlayConfig.repo}...`);
     
-    const tempDir = join(projectRoot, '.aidd', 'cache', 'plugins-temp');
+    const tempDir = join(projectRoot, '.cache', 'aidd-custom', 'plugins-temp');
     if (existsSync(tempDir)) {
       rmSync(tempDir, { recursive: true, force: true });
     }
@@ -538,7 +538,7 @@ pluginCmd
       return;
     }
     
-    const tempDir = join(projectRoot, '.aidd', 'cache', 'plugin-temp');
+    const tempDir = join(projectRoot, '.cache', 'aidd-custom', 'plugin-temp');
     if (existsSync(tempDir)) {
       rmSync(tempDir, { recursive: true, force: true });
     }
@@ -678,7 +678,7 @@ pluginCmd
     
     console.log('Removing plugin files (installed via plugin add)...');
     
-    const tempDir = join(projectRoot, '.aidd', 'cache', 'plugin-temp-remove');
+    const tempDir = join(projectRoot, '.cache', 'aidd-custom', 'plugin-temp-remove');
     if (existsSync(tempDir)) {
       rmSync(tempDir, { recursive: true, force: true });
     }
