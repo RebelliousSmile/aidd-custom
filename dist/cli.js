@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
-import { detectTool, getToolCustomDir, getToolRulesDir, getToolAgentsDir, getFileCount, validateOverlaySync, } from './index.js';
+import { detectTool, getToolCustomDir, getToolRulesDir, getToolAgentsDir, getFileCount, getPluginCounts, validateOverlaySync, } from './index.js';
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, cpSync, rmSync, statSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -192,6 +192,20 @@ program
         console.log(`Removed: ${templatesDir} (${count} files)`);
         cleaned++;
     }
+    if (overlayConfig) {
+        try {
+            const configContent = readFileSync(configPath, 'utf-8');
+            const config = JSON.parse(configContent);
+            if (config.plugins && Object.keys(config.plugins).length > 0) {
+                config.plugins = {};
+                writeFileSync(configPath, JSON.stringify(config, null, 2));
+                console.log('Reset plugins configuration');
+            }
+        }
+        catch (e) {
+            console.log('Warning: Could not reset plugins in config');
+        }
+    }
     if (cleaned === 0) {
         console.log('No overlay files found');
     }
@@ -291,13 +305,26 @@ program
                 templates: join(tempDir, 'templates', 'custom'),
             }, installedPlugins, join(tempDir, 'plugins'));
             let hasMismatch = false;
+            console.log('File breakdown by source:');
             for (const detail of validation.details) {
+                const pluginBreakdown = [];
+                for (const pluginName of installedPlugins) {
+                    const pluginDir = join(tempDir, 'plugins', pluginName);
+                    if (existsSync(join(pluginDir, 'plugin.json'))) {
+                        const pluginCounts = getPluginCounts(pluginDir);
+                        const key = detail.category.toLowerCase();
+                        if (pluginCounts[key] > 0) {
+                            pluginBreakdown.push(`${pluginName}: ${pluginCounts[key]}`);
+                        }
+                    }
+                }
+                const pluginStr = pluginBreakdown.length > 0 ? ` + [${pluginBreakdown.join(', ')}]` : '';
                 if (detail.localCount !== detail.expectedCount && detail.localCount > 0) {
-                    console.log(`⚠ ${detail.category}: local (${detail.localCount}) ≠ expected (${detail.expectedCount} = ${detail.overlayCount} overlay + ${detail.pluginExtra} plugins)`);
+                    console.log(`⚠ ${detail.category}: local=${detail.localCount}, overlay=${detail.overlayCount}${pluginStr}`);
                     hasMismatch = true;
                 }
                 else if (detail.localCount === detail.expectedCount && detail.localCount > 0) {
-                    console.log(`✓ ${detail.category}: in sync (${detail.localCount} files)`);
+                    console.log(`✓ ${detail.category}: local=${detail.localCount}, overlay=${detail.overlayCount}${pluginStr}`);
                 }
             }
             if (hasMismatch) {
