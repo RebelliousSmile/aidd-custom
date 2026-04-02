@@ -12,10 +12,28 @@ import {
   getToolAgentsDir,
   type ToolType,
 } from './index.js';
-import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, cpSync, rmSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, cpSync, rmSync, statSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { execSync } from 'child_process';
+
+function getFileCount(dir: string): number {
+  if (!existsSync(dir)) return 0;
+  let count = 0;
+  const walk = (d: string) => {
+    const items = readdirSync(d);
+    for (const item of items) {
+      const fullPath = join(d, item);
+      if (statSync(fullPath).isDirectory()) {
+        walk(fullPath);
+      } else if (item.endsWith('.md')) {
+        count++;
+      }
+    }
+  };
+  walk(dir);
+  return count;
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -88,7 +106,8 @@ program
               mkdirSync(fullPath, { recursive: true });
             }
             cpSync(sourcePath, fullPath, { recursive: true });
-            console.log(`Installed: ${customDir}`);
+            const count = getFileCount(fullPath);
+            console.log(`Installed: ${customDir} (${count} files)`);
           } else {
             console.log(`Warning: commands/custom not found in overlay`);
           }
@@ -100,7 +119,8 @@ program
               mkdirSync(rulesDestPath, { recursive: true });
             }
             cpSync(rulesSourcePath, rulesDestPath, { recursive: true });
-            console.log(`Installed: ${rulesDestPath}`);
+            const count = getFileCount(rulesDestPath);
+            console.log(`Installed: ${rulesDestPath} (${count} files)`);
           }
           
           const agentsSourcePath = join(tempDir, 'agents');
@@ -110,14 +130,16 @@ program
               mkdirSync(agentsDestPath, { recursive: true });
             }
             const files = readdirSync(agentsSourcePath);
+            let agentCount = 0;
             for (const file of files) {
               if (file.endsWith('.md')) {
                 const srcFile = join(agentsSourcePath, file);
                 const destFile = join(agentsDestPath, file);
                 cpSync(srcFile, destFile, { recursive: true });
-                console.log(`Installed: agent ${file}`);
+                agentCount++;
               }
             }
+            console.log(`Installed: ${agentsDestPath} (${agentCount} files)`);
           }
           
           const templatesSourcePath = join(tempDir, 'templates', 'custom');
@@ -127,7 +149,8 @@ program
               mkdirSync(templatesDestPath, { recursive: true });
             }
             cpSync(templatesSourcePath, templatesDestPath, { recursive: true });
-            console.log(`Installed: templates to aidd_docs/templates`);
+            const count = getFileCount(templatesDestPath);
+            console.log(`Installed: templates to aidd_docs/templates (${count} files)`);
           }
           
           rmSync(tempDir, { recursive: true, force: true });
@@ -203,16 +226,20 @@ program
     console.log('Installed files:');
     
     if (existsSync(join(projectRoot, customDir))) {
-      console.log(`  - ${customDir}`);
+      const count = getFileCount(join(projectRoot, customDir));
+      console.log(`  - ${customDir} (${count} files)`);
     }
     if (existsSync(join(projectRoot, rulesDir))) {
-      console.log(`  - ${rulesDir}`);
+      const count = getFileCount(join(projectRoot, rulesDir));
+      console.log(`  - ${rulesDir} (${count} files)`);
     }
     if (existsSync(join(projectRoot, agentsDir))) {
-      console.log(`  - ${agentsDir}`);
+      const count = getFileCount(join(projectRoot, agentsDir));
+      console.log(`  - ${agentsDir} (${count} files)`);
     }
     if (existsSync(join(projectRoot, templatesDir))) {
-      console.log(`  - ${templatesDir}`);
+      const count = getFileCount(join(projectRoot, templatesDir));
+      console.log(`  - ${templatesDir} (${count} files)`);
     }
     
     console.log('\nOverlay: up to date');
@@ -262,23 +289,27 @@ program
     let cleaned = 0;
     
     if (existsSync(join(projectRoot, customDir))) {
+      const count = getFileCount(join(projectRoot, customDir));
       rmSync(join(projectRoot, customDir), { recursive: true, force: true });
-      console.log(`Removed: ${customDir}`);
+      console.log(`Removed: ${customDir} (${count} files)`);
       cleaned++;
     }
     if (existsSync(join(projectRoot, rulesDir))) {
+      const count = getFileCount(join(projectRoot, rulesDir));
       rmSync(join(projectRoot, rulesDir), { recursive: true, force: true });
-      console.log(`Removed: ${rulesDir}`);
+      console.log(`Removed: ${rulesDir} (${count} files)`);
       cleaned++;
     }
     if (existsSync(join(projectRoot, agentsDir))) {
+      const count = getFileCount(join(projectRoot, agentsDir));
       rmSync(join(projectRoot, agentsDir), { recursive: true, force: true });
-      console.log(`Removed: ${agentsDir}`);
+      console.log(`Removed: ${agentsDir} (${count} files)`);
       cleaned++;
     }
     if (existsSync(join(projectRoot, templatesDir))) {
+      const count = getFileCount(join(projectRoot, templatesDir));
       rmSync(join(projectRoot, templatesDir), { recursive: true, force: true });
-      console.log(`Removed: ${templatesDir}`);
+      console.log(`Removed: ${templatesDir} (${count} files)`);
       cleaned++;
     }
     
@@ -333,7 +364,8 @@ program
     for (const check of checks) {
       const fullPath = join(projectRoot, check.path);
       if (existsSync(fullPath)) {
-        console.log(`✓ ${check.name}: installed`);
+        const count = getFileCount(fullPath);
+        console.log(`✓ ${check.name}: installed (${count} files)`);
         installed++;
       } else {
         console.log(`✗ ${check.name}: missing`);
