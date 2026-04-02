@@ -1,38 +1,43 @@
 ---
-name: 'aidd:overlay:plugin:list'
-description: 'List available overlay plugins from the repository'
+name: 'aidd:custom:plugin:list'
+description: 'List available custom plugins from the repository'
 ---
 
-# Overlay Plugin List
+# Custom Plugin List
 
 ## Goal
 
-Display all available plugins from the configured overlay repository.
+Display all available plugins from the configured custom repository.
 
 ## Rules
 
-- Require `overlay.repo` config to be set
+- Require `custom.repo` config to be set
 - Cache plugin list for 5 minutes
 
 ## Steps
 
-### Step 1: Read Configuration
+### Step 1: Detect AIDD Tool
 
-1. Read `overlay.repo` from `.aidd/config.json`
+1. Detect which AIDD tool is configured
+2. Display tool name in output
+
+### Step 2: Read Configuration
+
+1. Read `custom.repo` from `.aidd/config.json`
 2. Determine branch (default: main)
 
-### Step 2: Fetch Plugin Index
+### Step 3: Fetch Plugin Index
 
 1. Use cached repo or clone if not cached
 2. Read `plugins/index.json` if exists
 3. If no index, scan `plugins/*/` directories
 
-### Step 3: Display Plugin List
+### Step 4: Display Plugin List
 
 1. Build formatted table:
    ```
-   Available Plugins
-   ================
+   Available Plugins for <tool>
+   =============================
    
    Name                | Version | Description
    --------------------|---------|--------------------------
@@ -44,8 +49,8 @@ Display all available plugins from the configured overlay repository.
    [installed]
    ```
 
-### Step 4: Show Installed Status
+### Step 5: Show Installed Status
 
-1. Read `.aidd-overlay/manifest.json`
+1. Read `.aidd-custom/manifest.json`
 2. Mark installed plugins in list
 3. Show version comparison if outdated

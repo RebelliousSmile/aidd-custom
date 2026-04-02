@@ -1,5 +1,5 @@
 {
-  "overlay": {
+  "custom": {
     "repo": "RebelliousSmile/aidd-claude-custom",
     "branch": "main"
   }

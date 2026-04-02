@@ -1,10 +1,10 @@
 ---
-name: 'aidd:overlay:restore'
+name: 'aidd:custom:restore'
 description: 'Restore plugin files from backup'
 argument-hint: '<plugin-name>'
 ---
 
-# Overlay Restore
+# Custom Restore
 
 ## Goal
 
@@ -24,19 +24,20 @@ List and restore files from plugin backups.
 
 ## Steps
 
-### Step 1: Validate Plugin
+### Step 1: Detect AIDD Tool
 
 1. Extract plugin name from arguments
-2. Read `.aidd-overlay/manifest.json`
-3. Verify plugin was ever installed
+2. Read `.aidd-custom/manifest.json`
+3. Read tool from manifest
+4. Verify plugin was ever installed
 
 ### Step 2: List Available Backups
 
-1. Scan `.aidd-overlay/backups/<plugin>/`
+1. Scan `.aidd-custom/backups/<plugin>/`
 2. Build backup list with timestamps:
    ```
-   Available Backups for '<plugin>'
-   =================================
+   Available Backups for '<plugin>' (<tool>)
+   ======================================
    
    #1 | 2024-04-02 10:30:00 | 5 files
    #2 | 2024-04-01 15:45:00 | 5 files
@@ -55,9 +56,9 @@ List and restore files from plugin backups.
 1. Read `backups/<plugin>/<timestamp>/metadata.json`
 2. Display files available for restore:
    ```
-   Files in backup #2:
-   - .opencode/rules/custom/04-test.md
-   - .opencode/agents/custom-ada.md
+   Files in backup #2 for <tool>:
+   - commands/<tool>/custom/...
+   - rules/custom/...
    ```
 3. Prompt to select files or restore all
 
