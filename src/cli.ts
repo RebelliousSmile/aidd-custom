@@ -648,10 +648,18 @@ pluginCmd
       
       pluginsConfig[name] = { installed: true };
       
-      const configContent = readFileSync(configPath, 'utf-8');
-      const config = JSON.parse(configContent);
-      config.plugins = pluginsConfig;
-      writeFileSync(configPath, JSON.stringify(config, null, 2));
+      if (!existsSync(configPath)) {
+        const configDir = join(projectRoot, 'config');
+        if (!existsSync(configDir)) {
+          mkdirSync(configDir, { recursive: true });
+        }
+        writeFileSync(configPath, JSON.stringify({ overlay: overlayConfig, plugins: pluginsConfig }, null, 2));
+      } else {
+        const configContent = readFileSync(configPath, 'utf-8');
+        const config = JSON.parse(configContent);
+        config.plugins = pluginsConfig;
+        writeFileSync(configPath, JSON.stringify(config, null, 2));
+      }
       
       console.log(`\nPlugin "${name}" installed successfully`);
       
