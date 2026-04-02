@@ -1,30 +1,37 @@
 # AIDD Custom Framework
 
-Custom AIDD (AI-Driven Development) framework configuration with overlay plugin support.
+Custom AIDD (AI-Driven Development) starter with overlay plugin system.
 
-## Features
+## Structure
 
-- Custom commands for the AIDD workflow
-- Overlay plugin system for extending functionality
-- Standard rules and templates
+```
+.
+├── .aidd/
+│   └── config.json     # Overlay plugin configuration
+├── .opencode/
+│   ├── commands/overlay/   # Overlay plugin commands
+│   ├── skills/            # Custom skills
+│   └── rules/             # Custom rules
+├── opencode.json
+└── AGENTS.md
+```
 
-## Overlay Commands
+## Overlay Plugin Commands
 
 ```text
-aidd:overlay:install   # Install plugins from private repo
-aidd:overlay:update    # Check and apply plugin updates
-aidd:overlay:clean     # Remove all overlay files
-aidd:overlay:doctor    # Verify installation health
-aidd:overlay:restore   # Restore files from backup
-
-aidd:overlay:plugin:list    # List available plugins
-aidd:overlay:plugin:add     # Install a specific plugin
+aidd:overlay:install          # Install plugins from private repo
+aidd:overlay:update          # Check and apply plugin updates
+aidd:overlay:clean           # Remove all overlay files
+aidd:overlay:doctor          # Verify installation health
+aidd:overlay:restore         # Restore files from backup
+aidd:overlay:plugin:list     # List available plugins
+aidd:overlay:plugin:add      # Install a specific plugin
 aidd:overlay:plugin:remove   # Remove a plugin
 ```
 
 ## Configuration
 
-Add to `.aidd/config.json`:
+Edit `.aidd/config.json`:
 
 ```json
 {
@@ -37,7 +44,7 @@ Add to `.aidd/config.json`:
 
 ## Plugin Structure
 
-Plugins should contain:
+Plugins should be organized as:
 
 ```
 plugins/
