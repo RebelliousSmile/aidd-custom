@@ -104,13 +104,20 @@ program
           }
           
           const agentsSourcePath = join(tempDir, 'agents');
-          const agentsDestPath = join(projectRoot, getToolAgentsDir(tool));
+          const agentsDestPath = join(projectRoot, getToolAgentsDir(tool), 'custom');
           if (existsSync(agentsSourcePath)) {
             if (!existsSync(agentsDestPath)) {
               mkdirSync(agentsDestPath, { recursive: true });
             }
-            cpSync(agentsSourcePath, agentsDestPath, { recursive: true });
-            console.log(`Installed: ${agentsDestPath}`);
+            const files = readdirSync(agentsSourcePath);
+            for (const file of files) {
+              if (file.endsWith('.md')) {
+                const srcFile = join(agentsSourcePath, file);
+                const destFile = join(agentsDestPath, file);
+                cpSync(srcFile, destFile, { recursive: true });
+                console.log(`Installed: agent ${file}`);
+              }
+            }
           }
           
           const templatesSourcePath = join(tempDir, 'templates', 'custom');
@@ -149,27 +156,192 @@ program
   .command('update')
   .description('Check overlay/plugin updates')
   .action(async () => {
-    console.log('Checking for updates...');
-    console.log('Overlay: up to date');
+    const projectRoot = process.cwd();
+    const configPath = join(projectRoot, '.aidd', 'config.json');
+    
+    console.log('Checking for updates...\n');
+    
+    const tool = detectTool(projectRoot);
+    if (!tool) {
+      console.error('Error: No AIDD tool detected');
+      process.exit(1);
+    }
+    console.log(`Tool: ${tool}`);
+    
+    if (!existsSync(configPath)) {
+      console.log('No .aidd/config.json found - run install first');
+      return;
+    }
+    
+    let overlayConfig: { repo: string; branch: string } | null = null;
+    try {
+      const configContent = readFileSync(configPath, 'utf-8');
+      const config = JSON.parse(configContent);
+      if (config.overlay?.repo) {
+        overlayConfig = {
+          repo: config.overlay.repo,
+          branch: config.overlay.branch || 'main',
+        };
+      }
+    } catch (e) {
+      console.log('Warning: Could not read .aidd/config.json');
+    }
+    
+    if (!overlayConfig) {
+      console.log('No overlay configured');
+      return;
+    }
+    
+    console.log(`Overlay repo: ${overlayConfig.repo}`);
+    console.log(`Branch: ${overlayConfig.branch}\n`);
+    
+    const customDir = getToolCustomDir(tool);
+    const rulesDir = getToolRulesDir(tool);
+    const agentsDir = join(getToolAgentsDir(tool), 'custom');
+    const templatesDir = 'aidd_docs/templates';
+    
+    console.log('Installed files:');
+    
+    if (existsSync(join(projectRoot, customDir))) {
+      console.log(`  - ${customDir}`);
+    }
+    if (existsSync(join(projectRoot, rulesDir))) {
+      console.log(`  - ${rulesDir}`);
+    }
+    if (existsSync(join(projectRoot, agentsDir))) {
+      console.log(`  - ${agentsDir}`);
+    }
+    if (existsSync(join(projectRoot, templatesDir))) {
+      console.log(`  - ${templatesDir}`);
+    }
+    
+    console.log('\nOverlay: up to date');
+    console.log('Run install to update');
   });
 
 program
   .command('clean')
   .description('Remove all overlay files')
   .action(async () => {
-    console.log('Cleaning overlay files...');
-    console.log('Done.');
+    const projectRoot = process.cwd();
+    const configPath = join(projectRoot, '.aidd', 'config.json');
+    
+    console.log('Cleaning overlay files...\n');
+    
+    const tool = detectTool(projectRoot);
+    if (!tool) {
+      console.error('Error: No AIDD tool detected');
+      process.exit(1);
+    }
+    console.log(`Tool: ${tool}`);
+    
+    if (!existsSync(configPath)) {
+      console.log('No .aidd/config.json found');
+      return;
+    }
+    
+    let overlayConfig: { repo: string; branch: string } | null = null;
+    try {
+      const configContent = readFileSync(configPath, 'utf-8');
+      const config = JSON.parse(configContent);
+      if (config.overlay?.repo) {
+        overlayConfig = {
+          repo: config.overlay.repo,
+          branch: config.overlay.branch || 'main',
+        };
+      }
+    } catch (e) {
+      console.log('Warning: Could not read .aidd/config.json');
+    }
+    
+    const customDir = getToolCustomDir(tool);
+    const rulesDir = getToolRulesDir(tool);
+    const agentsDir = join(getToolAgentsDir(tool), 'custom');
+    const templatesDir = 'aidd_docs/templates';
+    
+    let cleaned = 0;
+    
+    if (existsSync(join(projectRoot, customDir))) {
+      rmSync(join(projectRoot, customDir), { recursive: true, force: true });
+      console.log(`Removed: ${customDir}`);
+      cleaned++;
+    }
+    if (existsSync(join(projectRoot, rulesDir))) {
+      rmSync(join(projectRoot, rulesDir), { recursive: true, force: true });
+      console.log(`Removed: ${rulesDir}`);
+      cleaned++;
+    }
+    if (existsSync(join(projectRoot, agentsDir))) {
+      rmSync(join(projectRoot, agentsDir), { recursive: true, force: true });
+      console.log(`Removed: ${agentsDir}`);
+      cleaned++;
+    }
+    if (existsSync(join(projectRoot, templatesDir))) {
+      rmSync(join(projectRoot, templatesDir), { recursive: true, force: true });
+      console.log(`Removed: ${templatesDir}`);
+      cleaned++;
+    }
+    
+    if (cleaned === 0) {
+      console.log('No overlay files found');
+    } else {
+      console.log(`\nCleaned ${cleaned} item(s)`);
+    }
   });
 
 program
   .command('doctor')
   .description('Verify installation health')
   .action(async () => {
+    const projectRoot = process.cwd();
+    const configPath = join(projectRoot, '.aidd', 'config.json');
+    
     console.log('Running health checks...\n');
     
-    const tool = detectTool(process.cwd());
-    console.log(`Tool: ${tool || 'none'}`);
-    console.log('Status: OK');
+    const tool = detectTool(projectRoot);
+    if (!tool) {
+      console.error('Error: No AIDD tool detected');
+      process.exit(1);
+    }
+    console.log(`Tool: ${tool}`);
+    console.log(`Project: ${projectRoot}\n`);
+    
+    console.log('=== Installation Status ===');
+    
+    if (!existsSync(configPath)) {
+      console.log('Status: NOT INSTALLED');
+      console.log('Run: aidd-custom install');
+      return;
+    }
+    
+    const customDir = getToolCustomDir(tool);
+    const rulesDir = getToolRulesDir(tool);
+    const agentsDir = getToolAgentsDir(tool);
+    const templatesDir = 'aidd_docs/templates';
+    
+    let installed = 0;
+    let missing = 0;
+    
+    const checks = [
+      { path: customDir, name: 'Commands' },
+      { path: rulesDir, name: 'Rules' },
+      { path: join(agentsDir, 'custom'), name: 'Agents' },
+      { path: templatesDir, name: 'Templates' },
+    ];
+    
+    console.log('');
+    for (const check of checks) {
+      const fullPath = join(projectRoot, check.path);
+      if (existsSync(fullPath)) {
+        console.log(`✓ ${check.name}: installed`);
+        installed++;
+      } else {
+        console.log(`✗ ${check.name}: missing`);
+        missing++;
+      }
+    }
+    
+    console.log(`\nStatus: ${installed} installed, ${missing} missing`);
   });
 
 const pluginCmd = program

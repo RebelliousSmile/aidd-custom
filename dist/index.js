@@ -198,7 +198,7 @@ export function getToolRulesDir(tool) {
  */
 export function getToolAgentsDir(tool) {
     const dirs = {
-        claude: '.claude/agents/custom',
+        claude: '.claude/agents',
         copilot: '.github/agents',
         cursor: '.cursor/agents',
         opencode: '.opencode/agents',

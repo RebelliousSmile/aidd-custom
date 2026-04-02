@@ -239,7 +239,7 @@ export function getToolRulesDir(tool: ToolType): string {
  */
 export function getToolAgentsDir(tool: ToolType): string {
   const dirs: Record<ToolType, string> = {
-    claude: '.claude/agents/custom',
+    claude: '.claude/agents',
     copilot: '.github/agents',
     cursor: '.cursor/agents',
     opencode: '.opencode/agents',
