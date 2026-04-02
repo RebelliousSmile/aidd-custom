@@ -372,4 +372,44 @@ export declare function getToolRulesDir(tool: ToolType): string;
  * Get the custom agents directory for a tool
  */
 export declare function getToolAgentsDir(tool: ToolType): string;
+/**
+ * Count .md files recursively in a directory
+ */
+export declare function getFileCount(dirPath: string): number;
+/**
+ * Get file counts for a plugin's directories
+ */
+export interface PluginCounts {
+    commands: number;
+    rules: number;
+    templates: number;
+}
+export declare function getPluginCounts(pluginDir: string): PluginCounts;
+/**
+ * Validation result for file count comparison
+ */
+export interface ValidationResult {
+    isValid: boolean;
+    details: {
+        category: string;
+        localCount: number;
+        expectedCount: number;
+        overlayCount: number;
+        pluginExtra: number;
+    }[];
+}
+/**
+ * Compare local files with overlay + plugins expected counts
+ */
+export declare function validateOverlaySync(localPaths: {
+    commands: string;
+    rules: string;
+    agents: string;
+    templates: string;
+}, overlayPaths: {
+    commands: string;
+    rules: string;
+    agents: string;
+    templates: string;
+}, installedPlugins: string[], pluginsDir: string): ValidationResult;
 //# sourceMappingURL=index.d.ts.map

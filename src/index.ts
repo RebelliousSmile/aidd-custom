@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { existsSync, readdirSync } from 'fs';
+import { existsSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
 
 /**
@@ -245,4 +245,115 @@ export function getToolAgentsDir(tool: ToolType): string {
     opencode: '.opencode/agents',
   };
   return dirs[tool];
+}
+
+/**
+ * Count .md files recursively in a directory
+ */
+export function getFileCount(dirPath: string): number {
+  if (!existsSync(dirPath)) return 0;
+  let count = 0;
+  const walk = (d: string) => {
+    const items = readdirSync(d);
+    for (const item of items) {
+      const fullPath = join(d, item);
+      if (statSync(fullPath).isDirectory()) {
+        walk(fullPath);
+      } else if (item.endsWith('.md')) {
+        count++;
+      }
+    }
+  };
+  walk(dirPath);
+  return count;
+}
+
+/**
+ * Get file counts for a plugin's directories
+ */
+export interface PluginCounts {
+  commands: number;
+  rules: number;
+  templates: number;
+}
+
+export function getPluginCounts(pluginDir: string): PluginCounts {
+  return {
+    commands: getFileCount(join(pluginDir, 'commands')),
+    rules: getFileCount(join(pluginDir, 'rules')),
+    templates: getFileCount(join(pluginDir, 'templates')),
+  };
+}
+
+/**
+ * Validation result for file count comparison
+ */
+export interface ValidationResult {
+  isValid: boolean;
+  details: {
+    category: string;
+    localCount: number;
+    expectedCount: number;
+    overlayCount: number;
+    pluginExtra: number;
+  }[];
+}
+
+/**
+ * Compare local files with overlay + plugins expected counts
+ */
+export function validateOverlaySync(
+  localPaths: {
+    commands: string;
+    rules: string;
+    agents: string;
+    templates: string;
+  },
+  overlayPaths: {
+    commands: string;
+    rules: string;
+    agents: string;
+    templates: string;
+  },
+  installedPlugins: string[],
+  pluginsDir: string
+): ValidationResult {
+  const categories = [
+    { key: 'commands', name: 'Commands', pluginKey: 'commands' as const },
+    { key: 'rules', name: 'Rules', pluginKey: 'rules' as const },
+    { key: 'agents', name: 'Agents', pluginKey: null },
+    { key: 'templates', name: 'Templates', pluginKey: 'templates' as const },
+  ];
+
+  const details: ValidationResult['details'] = [];
+  let isValid = true;
+
+  for (const cat of categories) {
+    const localCount = getFileCount(localPaths[cat.key as keyof typeof localPaths]);
+    const overlayCount = getFileCount(overlayPaths[cat.key as keyof typeof overlayPaths]);
+    
+    let pluginExtra = 0;
+    if (cat.pluginKey) {
+      for (const pluginName of installedPlugins) {
+        const pluginDir = join(pluginsDir, pluginName);
+        pluginExtra += getPluginCounts(pluginDir)[cat.pluginKey];
+      }
+    }
+
+    const expectedCount = overlayCount + pluginExtra;
+    
+    if (localCount !== expectedCount && localCount > 0) {
+      isValid = false;
+    }
+
+    details.push({
+      category: cat.name,
+      localCount,
+      expectedCount,
+      overlayCount,
+      pluginExtra,
+    });
+  }
+
+  return { isValid, details };
 }

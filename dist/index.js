@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { existsSync } from 'fs';
+import { existsSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
 /**
  * Directory structure for each tool
@@ -204,5 +204,70 @@ export function getToolAgentsDir(tool) {
         opencode: '.opencode/agents',
     };
     return dirs[tool];
+}
+/**
+ * Count .md files recursively in a directory
+ */
+export function getFileCount(dirPath) {
+    if (!existsSync(dirPath))
+        return 0;
+    let count = 0;
+    const walk = (d) => {
+        const items = readdirSync(d);
+        for (const item of items) {
+            const fullPath = join(d, item);
+            if (statSync(fullPath).isDirectory()) {
+                walk(fullPath);
+            }
+            else if (item.endsWith('.md')) {
+                count++;
+            }
+        }
+    };
+    walk(dirPath);
+    return count;
+}
+export function getPluginCounts(pluginDir) {
+    return {
+        commands: getFileCount(join(pluginDir, 'commands')),
+        rules: getFileCount(join(pluginDir, 'rules')),
+        templates: getFileCount(join(pluginDir, 'templates')),
+    };
+}
+/**
+ * Compare local files with overlay + plugins expected counts
+ */
+export function validateOverlaySync(localPaths, overlayPaths, installedPlugins, pluginsDir) {
+    const categories = [
+        { key: 'commands', name: 'Commands', pluginKey: 'commands' },
+        { key: 'rules', name: 'Rules', pluginKey: 'rules' },
+        { key: 'agents', name: 'Agents', pluginKey: null },
+        { key: 'templates', name: 'Templates', pluginKey: 'templates' },
+    ];
+    const details = [];
+    let isValid = true;
+    for (const cat of categories) {
+        const localCount = getFileCount(localPaths[cat.key]);
+        const overlayCount = getFileCount(overlayPaths[cat.key]);
+        let pluginExtra = 0;
+        if (cat.pluginKey) {
+            for (const pluginName of installedPlugins) {
+                const pluginDir = join(pluginsDir, pluginName);
+                pluginExtra += getPluginCounts(pluginDir)[cat.pluginKey];
+            }
+        }
+        const expectedCount = overlayCount + pluginExtra;
+        if (localCount !== expectedCount && localCount > 0) {
+            isValid = false;
+        }
+        details.push({
+            category: cat.name,
+            localCount,
+            expectedCount,
+            overlayCount,
+            pluginExtra,
+        });
+    }
+    return { isValid, details };
 }
 //# sourceMappingURL=index.js.map

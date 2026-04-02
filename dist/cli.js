@@ -1,29 +1,10 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
-import { detectTool, getToolCustomDir, getToolRulesDir, getToolAgentsDir, } from './index.js';
+import { detectTool, getToolCustomDir, getToolRulesDir, getToolAgentsDir, getFileCount, validateOverlaySync, } from './index.js';
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, cpSync, rmSync, statSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { execSync } from 'child_process';
-function getFileCount(dir) {
-    if (!existsSync(dir))
-        return 0;
-    let count = 0;
-    const walk = (d) => {
-        const items = readdirSync(d);
-        for (const item of items) {
-            const fullPath = join(d, item);
-            if (statSync(fullPath).isDirectory()) {
-                walk(fullPath);
-            }
-            else if (item.endsWith('.md')) {
-                count++;
-            }
-        }
-    };
-    walk(dir);
-    return count;
-}
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const program = new Command();
@@ -298,79 +279,25 @@ program
                 cwd: projectRoot,
                 stdio: 'pipe',
             });
-            const getPluginCount = (srcPath) => {
-                if (!existsSync(srcPath))
-                    return 0;
-                let count = 0;
-                const walk = (d) => {
-                    const items = readdirSync(d);
-                    for (const item of items) {
-                        const fullPath = join(d, item);
-                        if (statSync(fullPath).isDirectory()) {
-                            walk(fullPath);
-                        }
-                        else if (item.endsWith('.md')) {
-                            count++;
-                        }
-                    }
-                };
-                walk(srcPath);
-                return count;
-            };
-            const pluginCounts = {};
-            for (const pluginName of installedPlugins) {
-                const pluginDir = join(tempDir, 'plugins', pluginName);
-                if (existsSync(join(pluginDir, 'plugin.json'))) {
-                    pluginCounts[pluginName] = {
-                        commands: getPluginCount(join(pluginDir, 'commands')),
-                        rules: getPluginCount(join(pluginDir, 'rules')),
-                        templates: getPluginCount(join(pluginDir, 'templates')),
-                    };
-                }
-            }
-            const overlayChecks = [
-                {
-                    src: join(tempDir, 'commands', 'custom'),
-                    dest: join(projectRoot, customDir),
-                    name: 'Commands',
-                    pluginKey: 'commands'
-                },
-                {
-                    src: join(tempDir, 'rules', 'custom'),
-                    dest: join(projectRoot, rulesDir),
-                    name: 'Rules',
-                    pluginKey: 'rules'
-                },
-                {
-                    src: join(tempDir, 'agents'),
-                    dest: join(projectRoot, agentsDir, 'custom'),
-                    name: 'Agents',
-                    pluginKey: null
-                },
-                {
-                    src: join(tempDir, 'templates', 'custom'),
-                    dest: join(projectRoot, templatesDir),
-                    name: 'Templates',
-                    pluginKey: 'templates'
-                },
-            ];
+            const validation = validateOverlaySync({
+                commands: join(projectRoot, customDir),
+                rules: join(projectRoot, rulesDir),
+                agents: join(projectRoot, agentsDir, 'custom'),
+                templates: join(projectRoot, templatesDir),
+            }, {
+                commands: join(tempDir, 'commands', 'custom'),
+                rules: join(tempDir, 'rules', 'custom'),
+                agents: join(tempDir, 'agents'),
+                templates: join(tempDir, 'templates', 'custom'),
+            }, installedPlugins, join(tempDir, 'plugins'));
             let hasMismatch = false;
-            for (const check of overlayChecks) {
-                const overlayCount = existsSync(check.src) ? getFileCount(check.src) : 0;
-                let pluginExtra = 0;
-                if (check.pluginKey) {
-                    for (const pluginName of installedPlugins) {
-                        pluginExtra += pluginCounts[pluginName]?.[check.pluginKey] || 0;
-                    }
-                }
-                const expectedCount = overlayCount + pluginExtra;
-                const localCount = existsSync(check.dest) ? getFileCount(check.dest) : 0;
-                if (localCount !== expectedCount && localCount > 0) {
-                    console.log(`⚠ ${check.name}: local (${localCount}) ≠ expected (${expectedCount} = ${overlayCount} overlay + ${pluginExtra} plugins)`);
+            for (const detail of validation.details) {
+                if (detail.localCount !== detail.expectedCount && detail.localCount > 0) {
+                    console.log(`⚠ ${detail.category}: local (${detail.localCount}) ≠ expected (${detail.expectedCount} = ${detail.overlayCount} overlay + ${detail.pluginExtra} plugins)`);
                     hasMismatch = true;
                 }
-                else if (localCount === expectedCount && localCount > 0) {
-                    console.log(`✓ ${check.name}: in sync (${localCount} files)`);
+                else if (detail.localCount === detail.expectedCount && detail.localCount > 0) {
+                    console.log(`✓ ${detail.category}: in sync (${detail.localCount} files)`);
                 }
             }
             if (hasMismatch) {
