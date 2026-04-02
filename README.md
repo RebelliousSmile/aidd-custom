@@ -31,7 +31,6 @@ aidd:overlay:install     # Install base overlay + list plugins
 aidd:overlay:update      # Check overlay/plugin updates
 aidd:overlay:clean       # Remove all overlay files
 aidd:overlay:doctor      # Verify installation health
-aidd:overlay:restore      # Restore files from backup
 
 aidd:overlay:plugin:list     # List available plugins
 aidd:overlay:plugin:add       # Install a plugin
