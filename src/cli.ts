@@ -696,9 +696,26 @@ pluginCmd
           }
         }
         
-        // Note: templates are not removed to avoid deleting overlay files
-        // Templates from plugins and overlay are merged in the same folder
-        console.log(`  Note: templates were not removed (may overlap with overlay)`);
+        const templatesSrc = join(pluginDir, 'templates');
+        if (existsSync(templatesSrc)) {
+          const templatesDest = join(projectRoot, 'aidd_docs', 'templates');
+          const overlayTemplatesSrc = join(tempDir, 'templates', 'custom');
+          const templateFiles = readdirSync(templatesSrc).filter(f => f.endsWith('.md'));
+          let removedCount = 0;
+          for (const f of templateFiles) {
+            const templatePath = join(templatesDest, f);
+            const inOverlay = existsSync(join(overlayTemplatesSrc, f));
+            if (existsSync(templatePath) && !inOverlay) {
+              rmSync(templatePath, { force: true });
+              removedCount++;
+            }
+          }
+          if (removedCount > 0) {
+            console.log(`  Removed: templates (${removedCount} files)`);
+          } else {
+            console.log(`  Note: templates not removed (belong to overlay or shared)`);
+          }
+        }
       }
       
       delete pluginsConfig[name];
