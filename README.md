@@ -9,7 +9,7 @@ Custom AIDD (AI-Driven Development) starter with custom plugin system.
 ├── .aidd/
 │   └── config.json     # Custom plugin configuration
 ├── .opencode/
-│   └── commands/custom/   # Custom plugin commands
+│   └── commands/custom/ # Custom plugin commands
 ├── opencode.json
 └── AGENTS.md
 ```
@@ -18,25 +18,25 @@ Custom AIDD (AI-Driven Development) starter with custom plugin system.
 
 ```text
 aidd:custom:install          # Install plugins from private repo
-aidd:custom:update          # Check and apply plugin updates
-aidd:custom:clean           # Remove all plugin files
-aidd:custom:doctor          # Verify installation health
-aidd:custom:restore         # Restore files from backup
-aidd:custom:plugin:list     # List available plugins
-aidd:custom:plugin:add      # Install a specific plugin
-aidd:custom:plugin:remove   # Remove a plugin
+aidd:custom:update           # Check and apply plugin updates
+aidd:custom:clean            # Remove all plugin files
+aidd:custom:doctor           # Verify installation health
+aidd:custom:restore          # Restore files from backup
+aidd:custom:plugin:list      # List available plugins
+aidd:custom:plugin:add       # Install a specific plugin
+aidd:custom:plugin:remove    # Remove a plugin
 ```
 
 ## Tool Detection
 
 The system auto-detects your AIDD tool and installs plugins to the correct directories:
 
-| Tool | Directory | Custom Subdir |
-|------|----------|---------------|
-| Claude Code | `.claude/` | `.claude/commands/custom/` |
-| Copilot | `.github/` | `.github/prompts/custom/` |
-| Cursor | `.cursor/` | `.cursor/commands/custom/` |
-| OpenCode | `.opencode/` | `.opencode/commands/custom/` |
+| Tool | Directory | Commands | Rules | Agents | Skills |
+|------|----------|----------|-------|--------|--------|
+| Claude Code | `.claude/` | `commands/custom/` | `rules/custom/` | `agents/custom/` | `skills/custom/` |
+| Copilot | `.github/` | `prompts/custom/` | `instructions/custom/` | `agents/custom/` | `skills/custom/` |
+| Cursor | `.cursor/` | `commands/custom/` | `rules/custom/` | `agents/custom/` | `skills/custom/` |
+| OpenCode | `.opencode/` | `commands/custom/` | `rules/custom/` | `agents/custom/` | `skills/custom/` |
 
 ## Configuration
 
@@ -59,8 +59,10 @@ Plugins should be organized as:
 plugins/
 ├── index.json        # Plugin manifest
 ├── version.txt       # Version number
-└── commands/         # Files to install
-    └── ...
+├── commands/        # Slash commands
+├── rules/            # Coding rules
+├── agents/           # Specialized agents
+└── skills/           # Custom skills
 ```
 
 ## Getting Started

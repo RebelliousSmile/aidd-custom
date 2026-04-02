@@ -39,12 +39,12 @@ Required in `.aidd/config.json`:
 
 Detect AIDD tool by checking directory existence:
 
-| Tool | Directory | Custom Dir |
-|------|----------|------------|
-| Claude Code | `.claude/` | `.claude/commands/custom/` |
-| Copilot | `.github/` | `.github/prompts/custom/` |
-| Cursor | `.cursor/` | `.cursor/commands/custom/` |
-| OpenCode | `.opencode/` | `.opencode/commands/custom/` |
+| Tool | Directory | Commands | Rules | Agents | Skills |
+|------|----------|----------|-------|--------|--------|
+| Claude Code | `.claude/` | `.claude/commands/custom/` | `.claude/rules/custom/` | `.claude/agents/custom/` | `.claude/skills/custom/` |
+| Copilot | `.github/` | `.github/prompts/custom/` | `.github/instructions/custom/` | `.github/agents/custom/` | `.github/skills/custom/` |
+| Cursor | `.cursor/` | `.cursor/commands/custom/` | `.cursor/rules/custom/` | `.cursor/agents/custom/` | `.cursor/skills/custom/` |
+| OpenCode | `.opencode/` | `.opencode/commands/custom/` | `.opencode/rules/custom/` | `.opencode/agents/custom/` | `.opencode/skills/custom/` |
 
 ## Steps
 
