@@ -233,3 +233,16 @@ export function getToolRulesDir(tool: ToolType): string {
   };
   return dirs[tool];
 }
+
+/**
+ * Get the custom agents directory for a tool
+ */
+export function getToolAgentsDir(tool: ToolType): string {
+  const dirs: Record<ToolType, string> = {
+    claude: '.claude/agents/custom',
+    copilot: '.github/agents',
+    cursor: '.cursor/agents',
+    opencode: '.opencode/agents',
+  };
+  return dirs[tool];
+}

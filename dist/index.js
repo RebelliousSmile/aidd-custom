@@ -193,4 +193,16 @@ export function getToolRulesDir(tool) {
     };
     return dirs[tool];
 }
+/**
+ * Get the custom agents directory for a tool
+ */
+export function getToolAgentsDir(tool) {
+    const dirs = {
+        claude: '.claude/agents/custom',
+        copilot: '.github/agents',
+        cursor: '.cursor/agents',
+        opencode: '.opencode/agents',
+    };
+    return dirs[tool];
+}
 //# sourceMappingURL=index.js.map

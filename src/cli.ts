@@ -9,6 +9,7 @@ import {
   transformPath,
   getToolCustomDir,
   getToolRulesDir,
+  getToolAgentsDir,
   type ToolType,
 } from './index.js';
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, cpSync, rmSync } from 'fs';
@@ -100,6 +101,16 @@ program
             }
             cpSync(rulesSourcePath, rulesDestPath, { recursive: true });
             console.log(`Installed: ${rulesDestPath}`);
+          }
+          
+          const agentsSourcePath = join(tempDir, 'agents');
+          const agentsDestPath = join(projectRoot, getToolAgentsDir(tool));
+          if (existsSync(agentsSourcePath)) {
+            if (!existsSync(agentsDestPath)) {
+              mkdirSync(agentsDestPath, { recursive: true });
+            }
+            cpSync(agentsSourcePath, agentsDestPath, { recursive: true });
+            console.log(`Installed: ${agentsDestPath}`);
           }
           
           const templatesSourcePath = join(tempDir, 'templates', 'custom');
