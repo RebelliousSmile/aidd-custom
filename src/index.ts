@@ -27,6 +27,7 @@ export interface ToolConfig {
   templatesDir: string;
   instructions: string | null;
   instructionsPath: string | null;
+  configFile?: string;
   transform: {
     commands: TransformFn | null;
     rules: TransformFn | null;
@@ -68,6 +69,7 @@ export const TOOL_CONFIGS: Record<ToolType, ToolConfig> = {
     templatesDir: 'aidd_docs/templates/custom',
     instructions: 'AGENTS.md',
     instructionsPath: null,
+    configFile: 'opencode.json',
     transform: {
       commands: transformCommandsToOpenCode,
       rules: transformRulesToOpenCode,

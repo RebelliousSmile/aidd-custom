@@ -301,6 +301,16 @@ program
               console.log(`Installed: ${instructionsFile} (project root)`);
             }
           }
+          
+          const configFile = toolConfig.configFile;
+          if (configFile) {
+            const sourceConfig = join(tempDir, 'instructions', configFile);
+            if (existsSync(sourceConfig)) {
+              const destConfig = join(projectRoot, configFile);
+              cpSync(sourceConfig, destConfig);
+              console.log(`Installed: ${configFile} (project root)`);
+            }
+          }
         }
         
         const templatesSourcePath = join(tempDir, 'templates', 'custom');
