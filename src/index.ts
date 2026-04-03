@@ -8,6 +8,33 @@ import { join } from 'path';
 export type ToolType = 'claude' | 'copilot' | 'cursor' | 'opencode';
 
 /**
+ * Content type to transform
+ */
+export type ContentType = 'commands' | 'rules' | 'agents' | 'templates';
+
+/**
+ * Transformation function type
+ */
+export type TransformFn = (content: string, filename: string) => string;
+
+/**
+ * Tool configuration with transformation methods
+ */
+export interface ToolConfig {
+  commandsDir: string;
+  rulesDir: string;
+  agentsDir: string;
+  templatesDir: string;
+  instructions: string | null;
+  instructionsPath: string | null;
+  transform: {
+    commands: TransformFn | null;
+    rules: TransformFn | null;
+    agents: TransformFn | null;
+  };
+}
+
+/**
  * Directory structure for each tool
  */
 export const TOOL_DIRECTORIES: Record<ToolType, string[]> = {
@@ -15,6 +42,64 @@ export const TOOL_DIRECTORIES: Record<ToolType, string[]> = {
   copilot: ['.github'],
   cursor: ['.cursor'],
   opencode: ['.opencode'],
+};
+
+/**
+ * Tool configurations with specific transformation methods
+ */
+export const TOOL_CONFIGS: Record<ToolType, ToolConfig> = {
+  claude: {
+    commandsDir: '.claude/commands/custom',
+    rulesDir: '.claude/rules/custom',
+    agentsDir: '.claude/agents/custom',
+    templatesDir: 'aidd_docs/templates/custom',
+    instructions: 'CLAUDE.md',
+    instructionsPath: null,
+    transform: {
+      commands: null,
+      rules: null,
+      agents: null,
+    },
+  },
+  opencode: {
+    commandsDir: '.opencode/commands/aidd/custom',
+    rulesDir: '.opencode/rules/custom',
+    agentsDir: '.opencode/agents/custom',
+    templatesDir: 'aidd_docs/templates/custom',
+    instructions: 'AGENTS.md',
+    instructionsPath: null,
+    transform: {
+      commands: transformCommandsToOpenCode,
+      rules: transformRulesToOpenCode,
+      agents: transformAgentsToOpenCode,
+    },
+  },
+  cursor: {
+    commandsDir: '.cursor/commands',
+    rulesDir: '.cursor/rules',
+    agentsDir: '.cursor/agents',
+    templatesDir: 'aidd_docs/templates/custom',
+    instructions: '.mdc',
+    instructionsPath: '.cursor/rules',
+    transform: {
+      commands: transformCommandsToCursor,
+      rules: convertRuleToMdc,
+      agents: null,
+    },
+  },
+  copilot: {
+    commandsDir: '.github/prompts/custom',
+    rulesDir: '.github/instructions/custom',
+    agentsDir: '.github/agents',
+    templatesDir: 'aidd_docs/templates/custom',
+    instructions: 'copilot-instructions.md',
+    instructionsPath: '.github',
+    transform: {
+      commands: convertCommandToPrompt,
+      rules: convertRulesToCopilotInstructions,
+      agents: null,
+    },
+  },
 };
 
 /**
@@ -281,6 +366,233 @@ export function getToolAgentsDir(tool: ToolType): string {
     opencode: '.opencode/agents',
   };
   return dirs[tool];
+}
+
+/**
+ * Tool features support mapping
+ */
+export const TOOL_FEATURES: Record<ToolType, {
+  commands: boolean;
+  rules: boolean;
+  agents: boolean;
+  skills: boolean;
+  instructions: string | null;
+  instructionsPath: string | null;
+}> = {
+  claude: {
+    commands: true,
+    rules: true,
+    agents: true,
+    skills: true,
+    instructions: 'CLAUDE.md',
+    instructionsPath: null,
+  },
+  opencode: {
+    commands: true,
+    rules: true,
+    agents: true,
+    skills: true,
+    instructions: 'AGENTS.md',
+    instructionsPath: null,
+  },
+  cursor: {
+    commands: true,
+    rules: true,
+    agents: false,
+    skills: false,
+    instructions: '.mdc',
+    instructionsPath: '.cursor/rules',
+  },
+  copilot: {
+    commands: false,
+    rules: true,
+    agents: false,
+    skills: false,
+    instructions: 'copilot-instructions.md',
+    instructionsPath: '.github',
+  },
+};
+
+/**
+ * Check if a tool supports a specific feature
+ */
+export function hasFeature(tool: ToolType, feature: 'commands' | 'rules' | 'agents' | 'skills'): boolean {
+  return TOOL_FEATURES[tool][feature];
+}
+
+/**
+ * Get instructions file name for a tool
+ */
+export function getInstructionsFileName(tool: ToolType): string | null {
+  return TOOL_FEATURES[tool].instructions;
+}
+
+/**
+ * Get instructions destination path for a tool
+ */
+export function getInstructionsPath(tool: ToolType): string | null {
+  return TOOL_FEATURES[tool].instructionsPath;
+}
+
+/**
+ * Convert a rule file to MDC format for Cursor
+ */
+export function convertRuleToMdc(content: string, filename: string): string {
+  const name = filename.replace(/\.md$/, '').replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  const hasFrontmatter = content.startsWith('---');
+  
+  if (hasFrontmatter) {
+    return content;
+  }
+  
+  const description = content.slice(0, 200).split('\n')[0].replace(/^#*\s*/, '');
+  
+  return `---
+description: ${description || name}
+---
+# ${name}
+
+${content}
+`;
+}
+
+/**
+ * Convert a command to Copilot prompt format
+ */
+export function convertCommandToPrompt(commandContent: string, filename: string): string {
+  const name = filename.replace(/\.md$/, '').replace(/-/g, ' ');
+  const descriptionMatch = commandContent.match(/description:\s*(.+)/);
+  const description = descriptionMatch ? descriptionMatch[1] : name;
+  
+  const bodyStart = commandContent.indexOf('---', 3);
+  const body = bodyStart > -1 ? commandContent.slice(bodyStart + 3).trim() : commandContent;
+  
+  return `# ${name}
+
+## Description
+${description}
+
+## Instructions
+${body}
+
+## Quand utiliser
+- Lorsque vous avez besoin de: ${name.toLowerCase()}
+
+## Contexte additionnel
+- Utiliser les standards de codage du projet
+- Vérifier la sécurité et performance
+`;
+}
+
+/**
+ * Convert rules content to Copilot instructions format
+ */
+export function convertRulesToCopilotInstructions(rulesContent: string, filename: string): string {
+  const name = filename.replace(/\.md$/, '').replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  
+  return `---
+applyTo: "**"
+---
+# ${name}
+
+${rulesContent}
+`;
+}
+
+/**
+ * Transform commands to OpenCode format
+ */
+export function transformCommandsToOpenCode(content: string, filename: string): string {
+  const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
+  let frontmatter: Record<string, string> = {};
+  
+  if (frontmatterMatch) {
+    const lines = frontmatterMatch[1].split('\n');
+    for (const line of lines) {
+      const colonIndex = line.indexOf(':');
+      if (colonIndex === -1) continue;
+      const key = line.slice(0, colonIndex).trim();
+      const value = line.slice(colonIndex + 1).trim().replace(/^['"]|['"]$/g, '');
+      if (key && value) frontmatter[key] = value;
+    }
+  }
+  
+  const name = filename.replace(/\.md$/, '');
+  const description = frontmatter.description || name;
+  const argumentHint = frontmatter['argument-hint'] || '';
+  
+  const bodyStart = content.indexOf('---', 3);
+  const body = bodyStart > -1 ? content.slice(bodyStart + 3).trim() : content;
+  
+  const newFrontmatter = [
+    '---',
+    `name: ${name}`,
+    `description: ${description}`,
+    argumentHint ? `argument-hint: ${argumentHint}` : '',
+    '---',
+    '',
+    body,
+  ].filter(Boolean).join('\n');
+  
+  return newFrontmatter;
+}
+
+/**
+ * Transform rules to OpenCode format
+ */
+export function transformRulesToOpenCode(content: string, filename: string): string {
+  return content;
+}
+
+/**
+ * Transform agents to OpenCode format
+ */
+export function transformAgentsToOpenCode(content: string, filename: string): string {
+  const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
+  let frontmatter: Record<string, string> = {};
+  
+  if (frontmatterMatch) {
+    const lines = frontmatterMatch[1].split('\n');
+    for (const line of lines) {
+      const colonIndex = line.indexOf(':');
+      if (colonIndex === -1) continue;
+      const key = line.slice(0, colonIndex).trim();
+      const value = line.slice(colonIndex + 1).trim().replace(/^['"]|['"]$/g, '');
+      if (key && value) frontmatter[key] = value;
+    }
+  }
+  
+  const name = filename.replace(/\.md$/, '');
+  const description = frontmatter.description || `Agent for ${name}`;
+  
+  const newFrontmatter = [
+    '---',
+    `description: ${description}`,
+    frontmatter.mode ? `mode: ${frontmatter.mode}` : 'mode: subagent',
+    frontmatter.model ? `model: ${frontmatter.model}` : '',
+    frontmatter.temperature ? `temperature: ${frontmatter.temperature}` : '',
+    '---',
+    '',
+  ].filter(Boolean).join('\n');
+  
+  const bodyStart = content.indexOf('---', 3);
+  const body = bodyStart > -1 ? content.slice(bodyStart + 3).trim() : content;
+  
+  return `${newFrontmatter}\n${body}`;
+}
+
+/**
+ * Transform commands to Cursor format
+ */
+export function transformCommandsToCursor(content: string, filename: string): string {
+  return content;
+}
+
+/**
+ * Get tool configuration
+ */
+export function getToolConfig(tool: ToolType): ToolConfig {
+  return TOOL_CONFIGS[tool];
 }
 
 /**

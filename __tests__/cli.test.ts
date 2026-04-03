@@ -90,4 +90,116 @@ describe('CLI Logic Tests', () => {
       expect(DEFAULT_OVERLAY_REPO).toBe('RebelliousSmile/aidd-claude-custom');
     });
   });
+
+  describe('TOOL_FEATURES', () => {
+    it('should have correct features for claude', async () => {
+      const { TOOL_FEATURES } = await import('../src/index.js');
+      expect(TOOL_FEATURES.claude.commands).toBe(true);
+      expect(TOOL_FEATURES.claude.rules).toBe(true);
+      expect(TOOL_FEATURES.claude.agents).toBe(true);
+      expect(TOOL_FEATURES.claude.skills).toBe(true);
+      expect(TOOL_FEATURES.claude.instructions).toBe('CLAUDE.md');
+    });
+
+    it('should have correct features for copilot', async () => {
+      const { TOOL_FEATURES } = await import('../src/index.js');
+      expect(TOOL_FEATURES.copilot.commands).toBe(false);
+      expect(TOOL_FEATURES.copilot.rules).toBe(true);
+      expect(TOOL_FEATURES.copilot.agents).toBe(false);
+      expect(TOOL_FEATURES.copilot.skills).toBe(false);
+      expect(TOOL_FEATURES.copilot.instructions).toBe('copilot-instructions.md');
+    });
+
+    it('should have correct features for cursor', async () => {
+      const { TOOL_FEATURES } = await import('../src/index.js');
+      expect(TOOL_FEATURES.cursor.commands).toBe(true);
+      expect(TOOL_FEATURES.cursor.rules).toBe(true);
+      expect(TOOL_FEATURES.cursor.agents).toBe(false);
+      expect(TOOL_FEATURES.cursor.skills).toBe(false);
+      expect(TOOL_FEATURES.cursor.instructionsPath).toBe('.cursor/rules');
+    });
+  });
+
+  describe('hasFeature', () => {
+    it('should return correct feature support', async () => {
+      const { hasFeature } = await import('../src/index.js');
+      
+      expect(hasFeature('claude', 'commands')).toBe(true);
+      expect(hasFeature('claude', 'agents')).toBe(true);
+      expect(hasFeature('claude', 'skills')).toBe(true);
+      
+      expect(hasFeature('copilot', 'commands')).toBe(false);
+      expect(hasFeature('copilot', 'agents')).toBe(false);
+      expect(hasFeature('copilot', 'rules')).toBe(true);
+      
+      expect(hasFeature('cursor', 'agents')).toBe(false);
+      expect(hasFeature('cursor', 'skills')).toBe(false);
+    });
+  });
+
+  describe('getInstructionsFileName', () => {
+    it('should return correct file names', async () => {
+      const { getInstructionsFileName } = await import('../src/index.js');
+      
+      expect(getInstructionsFileName('claude')).toBe('CLAUDE.md');
+      expect(getInstructionsFileName('opencode')).toBe('AGENTS.md');
+      expect(getInstructionsFileName('copilot')).toBe('copilot-instructions.md');
+      expect(getInstructionsFileName('cursor')).toBe('.mdc');
+    });
+  });
+
+  describe('convertRuleToMdc', () => {
+    it('should add frontmatter to rule without frontmatter', async () => {
+      const { convertRuleToMdc } = await import('../src/index.js');
+      
+      const input = '# Coding Standards\n\nAlways use TypeScript.';
+      const result = convertRuleToMdc(input, 'coding-standards.md');
+      
+      expect(result).toContain('---');
+      expect(result).toContain('description:');
+      expect(result).toContain('# Coding Standards');
+    });
+
+    it('should not modify rule with existing frontmatter', async () => {
+      const { convertRuleToMdc } = await import('../src/index.js');
+      
+      const input = '---\ndescription: Custom\n---\n# Already has frontmatter';
+      const result = convertRuleToMdc(input, 'test.md');
+      
+      expect(result).toBe(input);
+    });
+  });
+
+  describe('convertCommandToPrompt', () => {
+    it('should convert command to prompt format', async () => {
+      const { convertCommandToPrompt } = await import('../src/index.js');
+      
+      const input = `---
+name: code-review
+description: Effectue une revue de code
+---
+Faites une revue de code complète.`;
+      
+      const result = convertCommandToPrompt(input, 'code-review.md');
+      
+      expect(result).toContain('# code review');
+      expect(result).toContain('Description');
+      expect(result).toContain('Effectue une revue de code');
+      expect(result).toContain('Instructions');
+      expect(result).toContain('Quand utiliser');
+    });
+  });
+
+  describe('convertRulesToCopilotInstructions', () => {
+    it('should convert rules to copilot format with frontmatter', async () => {
+      const { convertRulesToCopilotInstructions } = await import('../src/index.js');
+      
+      const input = '# Best Practices\n\nAlways use async/await.';
+      const result = convertRulesToCopilotInstructions(input, 'best-practices.md');
+      
+      expect(result).toContain('---');
+      expect(result).toContain('applyTo:');
+      expect(result).toContain('# Best Practices');
+    });
+  });
 });

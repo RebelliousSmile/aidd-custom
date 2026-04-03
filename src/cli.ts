@@ -7,15 +7,21 @@ import {
   validateConfig,
   validateManifest,
   validatePluginIndex,
-  transformPath,
   getToolCustomDir,
   getToolRulesDir,
   getToolAgentsDir,
+  getToolConfig,
   getFileCount,
   getPluginCounts,
   validateOverlaySync,
+  hasFeature,
+  getInstructionsFileName,
+  getInstructionsPath,
+  TOOL_FEATURES,
+  TOOL_CONFIGS,
   type ToolType,
   type ValidationResult,
+  type TransformFn,
 } from './index.js';
 import { getOverlayConfig, getGlobalConfig, DEFAULT_OVERLAY_REPO } from './config.js';
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, cpSync, rmSync, statSync } from 'fs';
@@ -119,54 +125,186 @@ program
         for (const tool of tools) {
           console.log(`\n=== Installing for ${tool} ===`);
           
-          const customDir = getToolCustomDir(tool);
-          const fullPath = join(projectRoot, customDir);
+          const toolConfig = getToolConfig(tool);
           
-          const sourcePath = join(tempDir, 'commands', 'custom');
-          if (existsSync(sourcePath)) {
-            if (!existsSync(fullPath)) {
-              mkdirSync(fullPath, { recursive: true });
+          if (hasFeature(tool, 'commands')) {
+            const customDir = toolConfig.commandsDir;
+            const fullPath = join(projectRoot, customDir);
+            const sourcePath = join(tempDir, 'commands', 'custom');
+            
+            if (existsSync(sourcePath)) {
+              if (!existsSync(fullPath)) {
+                mkdirSync(fullPath, { recursive: true });
+              }
+              
+              const transformFn = toolConfig.transform.commands;
+              const files = readdirSync(sourcePath).filter(f => f.endsWith('.md'));
+              
+              for (const file of files) {
+                const srcFile = join(sourcePath, file);
+                const destFile = join(fullPath, file);
+                const content = readFileSync(srcFile, 'utf-8');
+                
+                if (transformFn) {
+                  const transformed = transformFn(content, file);
+                  writeFileSync(destFile, transformed);
+                } else {
+                  cpSync(srcFile, destFile);
+                }
+              }
+              
+              const count = files.length;
+              console.log(`Installed: ${customDir} (${count} files)`);
             }
-            cpSync(sourcePath, fullPath, { recursive: true });
-            const count = getFileCount(fullPath);
-            console.log(`Installed: ${customDir} (${count} files)`);
-          } else {
-            console.log(`Warning: commands/custom not found in overlay`);
           }
           
-          const rulesSourcePath = join(tempDir, 'rules', 'custom');
-          const rulesDestPath = join(projectRoot, getToolRulesDir(tool));
-          if (existsSync(rulesSourcePath)) {
-            if (!existsSync(rulesDestPath)) {
-              mkdirSync(rulesDestPath, { recursive: true });
+          if (hasFeature(tool, 'rules')) {
+            const rulesDestPath = join(projectRoot, toolConfig.rulesDir);
+            const rulesSourcePath = join(tempDir, 'rules', 'custom');
+            
+            if (existsSync(rulesSourcePath)) {
+              if (!existsSync(rulesDestPath)) {
+                mkdirSync(rulesDestPath, { recursive: true });
+              }
+              
+              const transformFn = toolConfig.transform.rules;
+              const files = readdirSync(rulesSourcePath).filter(f => f.endsWith('.md'));
+              
+              for (const file of files) {
+                const srcFile = join(rulesSourcePath, file);
+                const destFile = join(rulesDestPath, file);
+                const content = readFileSync(srcFile, 'utf-8');
+                
+                if (transformFn) {
+                  const transformed = transformFn(content, file);
+                  writeFileSync(destFile, transformed);
+                } else {
+                  cpSync(srcFile, destFile);
+                }
+              }
+              
+              const count = files.length;
+              console.log(`Installed: ${rulesDestPath} (${count} files)`);
             }
-            cpSync(rulesSourcePath, rulesDestPath, { recursive: true });
-            const count = getFileCount(rulesDestPath);
-            console.log(`Installed: ${rulesDestPath} (${count} files)`);
           }
           
-          const agentsSourcePath = join(tempDir, 'agents');
-          const agentsDestPath = join(projectRoot, getToolAgentsDir(tool), 'custom');
-          if (existsSync(agentsSourcePath)) {
-            if (!existsSync(agentsDestPath)) {
-              mkdirSync(agentsDestPath, { recursive: true });
-            }
-            const files = readdirSync(agentsSourcePath);
-            let agentCount = 0;
-            for (const file of files) {
-              if (file.endsWith('.md')) {
+          if (hasFeature(tool, 'agents')) {
+            const agentsDestPath = join(projectRoot, toolConfig.agentsDir);
+            const agentsSourcePath = join(tempDir, 'agents');
+            
+            if (existsSync(agentsSourcePath)) {
+              if (!existsSync(agentsDestPath)) {
+                mkdirSync(agentsDestPath, { recursive: true });
+              }
+              
+              const transformFn = toolConfig.transform.agents;
+              const files = readdirSync(agentsSourcePath).filter(f => f.endsWith('.md'));
+              
+              for (const file of files) {
                 const srcFile = join(agentsSourcePath, file);
                 const destFile = join(agentsDestPath, file);
-                cpSync(srcFile, destFile, { recursive: true });
-                agentCount++;
+                const content = readFileSync(srcFile, 'utf-8');
+                
+                if (transformFn) {
+                  const transformed = transformFn(content, file);
+                  writeFileSync(destFile, transformed);
+                } else {
+                  cpSync(srcFile, destFile);
+                }
+              }
+              
+              if (files.length > 0) {
+                console.log(`Installed: ${agentsDestPath} (${files.length} files)`);
               }
             }
-            console.log(`Installed: ${agentsDestPath} (${agentCount} files)`);
+          }
+          
+          if (hasFeature(tool, 'skills')) {
+            const skillsSourcePath = join(tempDir, 'skills');
+            const skillsDir = tool === 'claude' ? '.claude/skills' : '.opencode/skills';
+            const skillsDestPath = join(projectRoot, skillsDir);
+            
+            if (existsSync(skillsSourcePath)) {
+              if (!existsSync(skillsDestPath)) {
+                mkdirSync(skillsDestPath, { recursive: true });
+              }
+              cpSync(skillsSourcePath, skillsDestPath, { recursive: true });
+              const count = getFileCount(skillsDestPath);
+              console.log(`Installed: ${skillsDir} (${count} skills)`);
+            }
+          }
+          
+          const instructionsFile = toolConfig.instructions;
+          const instructionsPath = toolConfig.instructionsPath;
+          
+          if (tool === 'copilot') {
+            const promptsSourcePath = join(tempDir, 'prompts', 'custom');
+            const promptsDestPath = join(projectRoot, toolConfig.commandsDir);
+            
+            if (existsSync(promptsSourcePath)) {
+              if (!existsSync(promptsDestPath)) {
+                mkdirSync(promptsDestPath, { recursive: true });
+              }
+              const files = readdirSync(promptsSourcePath).filter(f => f.endsWith('.md'));
+              for (const file of files) {
+                const srcFile = join(promptsSourcePath, file);
+                const destFile = join(promptsDestPath, file);
+                cpSync(srcFile, destFile);
+              }
+              console.log(`Installed: ${toolConfig.commandsDir} (${files.length} prompts)`);
+            } else {
+              const commandsSourcePath = join(tempDir, 'commands', 'custom');
+              if (existsSync(commandsSourcePath)) {
+                const transformFn = toolConfig.transform.commands;
+                mkdirSync(promptsDestPath, { recursive: true });
+                const files = readdirSync(commandsSourcePath).filter(f => f.endsWith('.md'));
+                for (const file of files) {
+                  const srcFile = join(commandsSourcePath, file);
+                  const destFile = join(promptsDestPath, file.replace('.md', '.prompt.md'));
+                  const content = readFileSync(srcFile, 'utf-8');
+                  
+                  if (transformFn) {
+                    const transformed = transformFn(content, file);
+                    writeFileSync(destFile, transformed);
+                  } else {
+                    cpSync(srcFile, destFile);
+                  }
+                }
+                console.log(`Installed: ${toolConfig.commandsDir} (${files.length} converted prompts)`);
+              }
+            }
+          }
+          
+          if (instructionsFile && instructionsPath) {
+            let sourceInstructions: string | null = null;
+            
+            if (tool === 'copilot') {
+              sourceInstructions = join(tempDir, 'instructions', 'copilot-instructions.md');
+            } else {
+              sourceInstructions = join(tempDir, 'instructions', instructionsFile);
+            }
+            
+            if (sourceInstructions && existsSync(sourceInstructions)) {
+              const destPath = join(projectRoot, instructionsPath, instructionsFile);
+              const destDir = join(projectRoot, instructionsPath);
+              if (!existsSync(destDir)) {
+                mkdirSync(destDir, { recursive: true });
+              }
+              cpSync(sourceInstructions, destPath);
+              console.log(`Installed: ${instructionsPath}/${instructionsFile}`);
+            }
+          } else if (instructionsFile) {
+            const sourceInstructions = join(tempDir, 'instructions', instructionsFile);
+            if (existsSync(sourceInstructions)) {
+              const destPath = join(projectRoot, instructionsFile);
+              cpSync(sourceInstructions, destPath);
+              console.log(`Installed: ${instructionsFile} (project root)`);
+            }
           }
         }
         
         const templatesSourcePath = join(tempDir, 'templates', 'custom');
-        const templatesDestPath = join(projectRoot, 'aidd_docs', 'templates', 'custom');
+        const templatesDestPath = join(projectRoot, 'aidd_docs/templates/custom');
         if (existsSync(templatesSourcePath)) {
           if (!existsSync(join(projectRoot, 'aidd_docs', 'templates'))) {
             mkdirSync(join(projectRoot, 'aidd_docs', 'templates'), { recursive: true });
@@ -200,40 +338,82 @@ program
     
     console.log('Cleaning overlay files...\n');
     
-    const tool = detectTool(projectRoot);
-    if (!tool) {
+    const tools = detectAllTools(projectRoot);
+    if (tools.length === 0) {
       console.error('Error: No AIDD tool detected');
       process.exit(1);
     }
-    console.log(`Tool: ${tool}`);
+    console.log(`Tools: ${tools.join(', ')}\n`);
     
     const overlayConfig = getOverlayConfig(projectRoot);
-    
-    const customDir = getToolCustomDir(tool);
-    const rulesDir = getToolRulesDir(tool);
-    const agentsDir = join(getToolAgentsDir(tool), 'custom');
     const templatesDir = 'aidd_docs/templates/custom';
     
     let cleaned = 0;
     
-    if (existsSync(join(projectRoot, customDir))) {
-      const count = getFileCount(join(projectRoot, customDir));
-      rmSync(join(projectRoot, customDir), { recursive: true, force: true });
-      console.log(`Removed: ${customDir} (${count} files)`);
-      cleaned++;
+    for (const tool of tools) {
+      const customDir = getToolCustomDir(tool);
+      const rulesDir = getToolRulesDir(tool);
+      const agentsDir = join(getToolAgentsDir(tool), 'custom');
+      
+      if (hasFeature(tool, 'commands') && existsSync(join(projectRoot, customDir))) {
+        const count = getFileCount(join(projectRoot, customDir));
+        rmSync(join(projectRoot, customDir), { recursive: true, force: true });
+        console.log(`Removed: ${customDir} (${count} files)`);
+        cleaned++;
+      }
+      
+      if (hasFeature(tool, 'rules') && existsSync(join(projectRoot, rulesDir))) {
+        const count = getFileCount(join(projectRoot, rulesDir));
+        rmSync(join(projectRoot, rulesDir), { recursive: true, force: true });
+        console.log(`Removed: ${rulesDir} (${count} files)`);
+        cleaned++;
+      }
+      
+      if (hasFeature(tool, 'agents') && existsSync(join(projectRoot, agentsDir))) {
+        const count = getFileCount(join(projectRoot, agentsDir));
+        rmSync(join(projectRoot, agentsDir), { recursive: true, force: true });
+        console.log(`Removed: ${agentsDir} (${count} files)`);
+        cleaned++;
+      }
+      
+      if (hasFeature(tool, 'skills')) {
+        const skillsDir = tool === 'claude' ? '.claude/skills' : '.opencode/skills';
+        if (existsSync(join(projectRoot, skillsDir))) {
+          const count = getFileCount(join(projectRoot, skillsDir));
+          rmSync(join(projectRoot, skillsDir), { recursive: true, force: true });
+          console.log(`Removed: ${skillsDir} (${count} files)`);
+          cleaned++;
+        }
+      }
+      
+      if (tool === 'copilot') {
+        const copilotInstructionsDir = join(projectRoot, '.github', 'instructions', 'custom');
+        if (existsSync(copilotInstructionsDir)) {
+          const count = getFileCount(copilotInstructionsDir);
+          rmSync(copilotInstructionsDir, { recursive: true, force: true });
+          console.log(`Removed: .github/instructions/custom (${count} files)`);
+          cleaned++;
+        }
+        const copilotPromptsDir = join(projectRoot, '.github', 'prompts', 'custom');
+        if (existsSync(copilotPromptsDir)) {
+          const count = getFileCount(copilotPromptsDir);
+          rmSync(copilotPromptsDir, { recursive: true, force: true });
+          console.log(`Removed: .github/prompts/custom (${count} files)`);
+          cleaned++;
+        }
+      }
+      
+      if (tool === 'cursor') {
+        const cursorInstructionsDir = join(projectRoot, '.cursor', 'rules');
+        if (existsSync(cursorInstructionsDir)) {
+          const count = getFileCount(cursorInstructionsDir);
+          rmSync(cursorInstructionsDir, { recursive: true, force: true });
+          console.log(`Removed: .cursor/rules (${count} files)`);
+          cleaned++;
+        }
+      }
     }
-    if (existsSync(join(projectRoot, rulesDir))) {
-      const count = getFileCount(join(projectRoot, rulesDir));
-      rmSync(join(projectRoot, rulesDir), { recursive: true, force: true });
-      console.log(`Removed: ${rulesDir} (${count} files)`);
-      cleaned++;
-    }
-    if (existsSync(join(projectRoot, agentsDir))) {
-      const count = getFileCount(join(projectRoot, agentsDir));
-      rmSync(join(projectRoot, agentsDir), { recursive: true, force: true });
-      console.log(`Removed: ${agentsDir} (${count} files)`);
-      cleaned++;
-    }
+    
     if (existsSync(join(projectRoot, templatesDir))) {
       const count = getFileCount(join(projectRoot, templatesDir));
       rmSync(join(projectRoot, templatesDir), { recursive: true, force: true });
