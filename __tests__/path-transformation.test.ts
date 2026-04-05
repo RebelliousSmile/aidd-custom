@@ -35,7 +35,7 @@ describe('Path Transformation', () => {
     });
 
     it('should return correct custom directory for Copilot', () => {
-      expect(getToolCustomDir('copilot')).toBe('.github/commands');
+      expect(getToolCustomDir('copilot')).toBe('.github/prompts/custom');
     });
 
     it('should return correct custom directory for Cursor', () => {
@@ -43,7 +43,7 @@ describe('Path Transformation', () => {
     });
 
     it('should return correct custom directory for OpenCode', () => {
-      expect(getToolCustomDir('opencode')).toBe('.opencode/commands');
+      expect(getToolCustomDir('opencode')).toBe('.opencode/commands/aidd/custom');
     });
   });
 

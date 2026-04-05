@@ -408,7 +408,7 @@ export declare function getToolCustomDir(tool: ToolType): string;
  */
 export declare function getToolRulesDir(tool: ToolType): string;
 /**
- * Get the custom agents directory for a tool
+ * Get the agents directory for a tool
  */
 export declare function getToolAgentsDir(tool: ToolType): string;
 /**

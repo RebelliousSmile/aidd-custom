@@ -268,9 +268,9 @@ export function transformPath(sourcePath, tool) {
 export function getToolCustomDir(tool) {
     const dirs = {
         claude: '.claude/commands/custom',
-        copilot: '.github/commands',
+        copilot: '.github/prompts/custom',
         cursor: '.cursor/commands',
-        opencode: '.opencode/commands',
+        opencode: '.opencode/commands/aidd/custom',
     };
     return dirs[tool];
 }
@@ -287,7 +287,7 @@ export function getToolRulesDir(tool) {
     return dirs[tool];
 }
 /**
- * Get the custom agents directory for a tool
+ * Get the agents directory for a tool
  */
 export function getToolAgentsDir(tool) {
     const dirs = {

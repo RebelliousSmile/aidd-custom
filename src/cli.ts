@@ -198,7 +198,7 @@ program
               }
               
               const transformFn = toolConfig.transform.agents;
-              const files = readdirSync(agentsSourcePath).filter(f => f.endsWith('.md'));
+              const files = readdirSync(agentsSourcePath).filter(f => f.endsWith('.md') && f.startsWith('custom-'));
               
               for (const file of files) {
                 const srcFile = join(agentsSourcePath, file);
@@ -238,39 +238,44 @@ program
           const instructionsPath = toolConfig.instructionsPath;
           
           if (tool === 'copilot') {
-            const promptsSourcePath = join(tempDir, 'prompts', 'custom');
-            const promptsDestPath = join(projectRoot, toolConfig.commandsDir);
-            
-            if (existsSync(promptsSourcePath)) {
-              if (!existsSync(promptsDestPath)) {
-                mkdirSync(promptsDestPath, { recursive: true });
-              }
-              const files = readdirSync(promptsSourcePath).filter(f => f.endsWith('.md'));
-              for (const file of files) {
-                const srcFile = join(promptsSourcePath, file);
-                const destFile = join(promptsDestPath, file);
-                cpSync(srcFile, destFile);
-              }
-              console.log(`Installed: ${toolConfig.commandsDir} (${files.length} prompts)`);
+            const copilotInstructionsPath = join(projectRoot, '.github', 'copilot-instructions.md');
+            if (!existsSync(copilotInstructionsPath) && !existsSync(join(projectRoot, '.github', 'instructions'))) {
+              console.log('Skipping Copilot (no .github/copilot-instructions.md or .github/instructions/)');
             } else {
-              const commandsSourcePath = join(tempDir, 'commands', 'custom');
-              if (existsSync(commandsSourcePath)) {
-                const transformFn = toolConfig.transform.commands;
-                mkdirSync(promptsDestPath, { recursive: true });
-                const files = readdirSync(commandsSourcePath).filter(f => f.endsWith('.md'));
-                for (const file of files) {
-                  const srcFile = join(commandsSourcePath, file);
-                  const destFile = join(promptsDestPath, file.replace('.md', '.prompt.md'));
-                  const content = readFileSync(srcFile, 'utf-8');
-                  
-                  if (transformFn) {
-                    const transformed = transformFn(content, file);
-                    writeFileSync(destFile, transformed);
-                  } else {
-                    cpSync(srcFile, destFile);
-                  }
+              const promptsSourcePath = join(tempDir, 'prompts', 'custom');
+              const promptsDestPath = join(projectRoot, toolConfig.commandsDir);
+              
+              if (existsSync(promptsSourcePath)) {
+                if (!existsSync(promptsDestPath)) {
+                  mkdirSync(promptsDestPath, { recursive: true });
                 }
-                console.log(`Installed: ${toolConfig.commandsDir} (${files.length} converted prompts)`);
+                const files = readdirSync(promptsSourcePath).filter(f => f.endsWith('.md'));
+                for (const file of files) {
+                  const srcFile = join(promptsSourcePath, file);
+                  const destFile = join(promptsDestPath, file);
+                  cpSync(srcFile, destFile);
+                }
+                console.log(`Installed: ${toolConfig.commandsDir} (${files.length} prompts)`);
+              } else {
+                const commandsSourcePath = join(tempDir, 'commands', 'custom');
+                if (existsSync(commandsSourcePath)) {
+                  const transformFn = toolConfig.transform.commands;
+                  mkdirSync(promptsDestPath, { recursive: true });
+                  const files = readdirSync(commandsSourcePath).filter(f => f.endsWith('.md'));
+                  for (const file of files) {
+                    const srcFile = join(commandsSourcePath, file);
+                    const destFile = join(promptsDestPath, file.replace('.md', '.prompt.md'));
+                    const content = readFileSync(srcFile, 'utf-8');
+                    
+                    if (transformFn) {
+                      const transformed = transformFn(content, file);
+                      writeFileSync(destFile, transformed);
+                    } else {
+                      cpSync(srcFile, destFile);
+                    }
+                  }
+                  console.log(`Installed: ${toolConfig.commandsDir} (${files.length} converted prompts)`);
+                }
               }
             }
           }
@@ -363,7 +368,7 @@ program
     for (const tool of tools) {
       const customDir = getToolCustomDir(tool);
       const rulesDir = getToolRulesDir(tool);
-      const agentsDir = join(getToolAgentsDir(tool), 'custom');
+      const agentsDir = getToolAgentsDir(tool);
       
       if (hasFeature(tool, 'commands') && existsSync(join(projectRoot, customDir))) {
         const count = getFileCount(join(projectRoot, customDir));
@@ -380,10 +385,16 @@ program
       }
       
       if (hasFeature(tool, 'agents') && existsSync(join(projectRoot, agentsDir))) {
-        const count = getFileCount(join(projectRoot, agentsDir));
-        rmSync(join(projectRoot, agentsDir), { recursive: true, force: true });
-        console.log(`Removed: ${agentsDir} (${count} files)`);
-        cleaned++;
+        const agentsFiles = readdirSync(join(projectRoot, agentsDir)).filter(f => f.startsWith('custom-') && f.endsWith('.md'));
+        let count = 0;
+        for (const file of agentsFiles) {
+          rmSync(join(projectRoot, agentsDir, file), { force: true });
+          count++;
+        }
+        if (count > 0) {
+          console.log(`Removed: ${agentsDir} (${count} custom-* files)`);
+          cleaned++;
+        }
       }
       
       if (hasFeature(tool, 'skills')) {
@@ -391,7 +402,7 @@ program
         if (existsSync(join(projectRoot, skillsDir))) {
           const count = getFileCount(join(projectRoot, skillsDir));
           rmSync(join(projectRoot, skillsDir), { recursive: true, force: true });
-          console.log(`Removed: ${skillsDir} (${count} files)`);
+          console.log(`Removed: ${skillsDir} (${count} skills)`);
           cleaned++;
         }
       }
@@ -409,6 +420,12 @@ program
           const count = getFileCount(copilotPromptsDir);
           rmSync(copilotPromptsDir, { recursive: true, force: true });
           console.log(`Removed: .github/prompts/custom (${count} files)`);
+          cleaned++;
+        }
+        const copilotInstructionsFile = join(projectRoot, '.github', 'copilot-instructions.md');
+        if (existsSync(copilotInstructionsFile)) {
+          rmSync(copilotInstructionsFile, { force: true });
+          console.log(`Removed: .github/copilot-instructions.md`);
           cleaned++;
         }
       }
@@ -498,7 +515,7 @@ program
     const checks = [
       { path: customDir, name: 'Commands' },
       { path: rulesDir, name: 'Rules' },
-      { path: join(agentsDir, 'custom'), name: 'Agents' },
+      { path: agentsDir, name: 'Agents' },
       { path: templatesDir, name: 'Templates' },
     ];
     
@@ -545,7 +562,7 @@ program
           {
             commands: join(projectRoot, customDir),
             rules: join(projectRoot, rulesDir),
-            agents: join(projectRoot, agentsDir, 'custom'),
+            agents: join(projectRoot, agentsDir),
             templates: join(projectRoot, templatesDir),
           },
           {
@@ -771,13 +788,13 @@ pluginCmd
       
       const agentsSrc = join(pluginDir, 'agents');
       if (existsSync(agentsSrc)) {
-        const agentsDest = join(projectRoot, getToolAgentsDir(tool), 'custom');
+        const agentsDest = join(projectRoot, getToolAgentsDir(tool));
         if (!existsSync(agentsDest)) {
           mkdirSync(agentsDest, { recursive: true });
         }
-        const files = readdirSync(agentsSrc).filter(f => f.endsWith('.md'));
+        const files = readdirSync(agentsSrc).filter(f => f.endsWith('.md') && f.startsWith('custom-'));
         for (const file of files) {
-          cpSync(join(agentsSrc, file), join(agentsDest, file), { recursive: true });
+          cpSync(join(agentsSrc, file), join(agentsDest, file));
         }
         console.log(`  Agents installed`);
         installed++;
@@ -921,8 +938,8 @@ pluginCmd
         
         const agentsSrc = join(pluginDir, 'agents');
         if (existsSync(agentsSrc)) {
-          const agentsDest = join(projectRoot, getToolAgentsDir(tool), 'custom');
-          const agentFiles = readdirSync(agentsSrc).filter(f => f.endsWith('.md'));
+          const agentsDest = join(projectRoot, getToolAgentsDir(tool));
+          const agentFiles = readdirSync(agentsSrc).filter(f => f.endsWith('.md') && f.startsWith('custom-'));
           for (const f of agentFiles) {
             const agentPath = join(agentsDest, f);
             if (existsSync(agentPath)) {
