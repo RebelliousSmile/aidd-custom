@@ -25,7 +25,27 @@ import {
 } from './index.js';
 import { getOverlayConfig, getGlobalConfig, DEFAULT_OVERLAY_REPO } from './config.js';
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, cpSync, rmSync, statSync } from 'fs';
-import { join, dirname } from 'path';
+import { join, dirname, relative, basename } from 'path';
+
+/**
+ * Recursively collect all .md files under a directory, returning relative paths
+ */
+function collectMdFiles(dir: string): string[] {
+  if (!existsSync(dir)) return [];
+  const results: string[] = [];
+  const walk = (d: string) => {
+    for (const item of readdirSync(d)) {
+      const fullPath = join(d, item);
+      if (statSync(fullPath).isDirectory()) {
+        walk(fullPath);
+      } else if (item.endsWith('.md')) {
+        results.push(relative(dir, fullPath));
+      }
+    }
+  };
+  walk(dir);
+  return results;
+}
 import { fileURLToPath } from 'url';
 import { execSync } from 'child_process';
 
@@ -138,21 +158,25 @@ program
               }
               
               const transformFn = toolConfig.transform.commands;
-              const files = readdirSync(sourcePath).filter(f => f.endsWith('.md'));
-              
+              const files = collectMdFiles(sourcePath);
+
               for (const file of files) {
                 const srcFile = join(sourcePath, file);
                 const destFile = join(fullPath, file);
+                const destDir = dirname(destFile);
+                if (!existsSync(destDir)) {
+                  mkdirSync(destDir, { recursive: true });
+                }
                 const content = readFileSync(srcFile, 'utf-8');
-                
+
                 if (transformFn) {
-                  const transformed = transformFn(content, file);
+                  const transformed = transformFn(content, basename(file));
                   writeFileSync(destFile, transformed);
                 } else {
                   cpSync(srcFile, destFile);
                 }
               }
-              
+
               const count = files.length;
               console.log(`Installed: ${customDir} (${count} files)`);
             }
@@ -168,15 +192,19 @@ program
               }
               
               const transformFn = toolConfig.transform.rules;
-              const files = readdirSync(rulesSourcePath).filter(f => f.endsWith('.md'));
-              
+              const files = collectMdFiles(rulesSourcePath);
+
               for (const file of files) {
                 const srcFile = join(rulesSourcePath, file);
                 const destFile = join(rulesDestPath, file);
+                const destDir = dirname(destFile);
+                if (!existsSync(destDir)) {
+                  mkdirSync(destDir, { recursive: true });
+                }
                 const content = readFileSync(srcFile, 'utf-8');
-                
+
                 if (transformFn) {
-                  const transformed = transformFn(content, file);
+                  const transformed = transformFn(content, basename(file));
                   writeFileSync(destFile, transformed);
                 } else {
                   cpSync(srcFile, destFile);
@@ -261,14 +289,14 @@ program
                 if (existsSync(commandsSourcePath)) {
                   const transformFn = toolConfig.transform.commands;
                   mkdirSync(promptsDestPath, { recursive: true });
-                  const files = readdirSync(commandsSourcePath).filter(f => f.endsWith('.md'));
+                  const files = collectMdFiles(commandsSourcePath);
                   for (const file of files) {
                     const srcFile = join(commandsSourcePath, file);
-                    const destFile = join(promptsDestPath, file.replace('.md', '.prompt.md'));
+                    const destFile = join(promptsDestPath, basename(file).replace('.md', '.prompt.md'));
                     const content = readFileSync(srcFile, 'utf-8');
-                    
+
                     if (transformFn) {
-                      const transformed = transformFn(content, file);
+                      const transformed = transformFn(content, basename(file));
                       writeFileSync(destFile, transformed);
                     } else {
                       cpSync(srcFile, destFile);
