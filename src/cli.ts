@@ -23,7 +23,7 @@ import {
   type ValidationResult,
   type TransformFn,
 } from './index.js';
-import { getOverlayConfig, getGlobalConfig, DEFAULT_OVERLAY_REPO } from './config.js';
+import { getOverlayConfig, getGlobalConfig, getGlobalPlugins, saveGlobalPlugins, GLOBAL_CONFIG_FILE, DEFAULT_OVERLAY_REPO } from './config.js';
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, cpSync, rmSync, statSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -31,9 +31,6 @@ import { execSync } from 'child_process';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-
-const PACKAGE_ROOT = join(__dirname, '..');
-const GLOBAL_CONFIG_FILE = join(PACKAGE_ROOT, 'config.json');
 
 const program = new Command();
 
@@ -94,7 +91,7 @@ program
       const overlayConfig = getOverlayConfig(projectRoot);
       
       if (!overlayConfig) {
-        console.log('No overlay configured. Run: aidd-custom setup or create config/global.json');
+        console.log('No overlay configured. Run: aidd-custom setup');
         console.log('Creating tool directories without overlay...\n');
         for (const tool of tools) {
           const customDir = getToolCustomDir(tool);
@@ -349,8 +346,7 @@ program
   .description('Remove all overlay files')
   .action(async () => {
     const projectRoot = process.cwd();
-    const configPath = join(projectRoot, 'config', 'global.json');
-    
+
     console.log('Cleaning overlay files...\n');
     
     const tools = detectAllTools(projectRoot);
@@ -448,18 +444,10 @@ program
       cleaned++;
     }
     
-    if (overlayConfig && existsSync(configPath)) {
-      try {
-        const configContent = readFileSync(configPath, 'utf-8');
-        const config = JSON.parse(configContent);
-        if (config.plugins && Object.keys(config.plugins).length > 0) {
-          config.plugins = {};
-          writeFileSync(configPath, JSON.stringify(config, null, 2));
-          console.log('Reset plugins configuration');
-        }
-      } catch (e) {
-        console.log('Warning: Could not reset plugins in config');
-      }
+    const plugins = getGlobalPlugins();
+    if (Object.keys(plugins).length > 0) {
+      saveGlobalPlugins({});
+      console.log('Reset plugins configuration');
     }
     
     if (cleaned === 0) {
@@ -488,29 +476,19 @@ program
     console.log('=== Installation Status ===');
     
     const overlayConfig = getOverlayConfig(projectRoot);
-    const configPath = join(projectRoot, 'config', 'global.json');
-    
-    if (!existsSync(configPath) && !overlayConfig) {
+
+    if (!overlayConfig) {
       console.log('Status: NOT INSTALLED');
       console.log('Run: aidd-custom install or aidd-custom setup');
       return;
     }
-    
+
     const customDir = getToolCustomDir(tool);
     const rulesDir = getToolRulesDir(tool);
     const agentsDir = getToolAgentsDir(tool);
     const templatesDir = 'aidd_docs/templates/custom';
-    const templatesDirOverlay = 'aidd_docs/templates';
-    
-    let pluginsConfig: Record<string, { installed: boolean }> = {};
-    if (existsSync(configPath)) {
-      try {
-        const configContent = readFileSync(configPath, 'utf-8');
-        const config = JSON.parse(configContent);
-        pluginsConfig = config.plugins || {};
-      } catch (e) {
-      }
-    }
+
+    const pluginsConfig = getGlobalPlugins();
     
     const checks = [
       { path: customDir, name: 'Commands' },
@@ -622,28 +600,18 @@ pluginCmd
   .description('List available plugins')
   .action(async () => {
     const projectRoot = process.cwd();
-    const configPath = join(projectRoot, 'config', 'global.json');
-    
+
     console.log('Available Plugins');
     console.log('================\n');
-    
+
     const tool = detectTool(projectRoot);
     if (!tool) {
       console.error('Error: No AIDD tool detected');
       process.exit(1);
     }
-    
+
     const overlayConfig = getOverlayConfig(projectRoot);
-    
-    let pluginsConfig: Record<string, { installed: boolean }> = {};
-    if (existsSync(configPath)) {
-      try {
-        const configContent = readFileSync(configPath, 'utf-8');
-        const config = JSON.parse(configContent);
-        pluginsConfig = config.plugins || {};
-      } catch (e) {
-      }
-    }
+    const pluginsConfig = getGlobalPlugins();
     
     if (!overlayConfig) {
       console.log('No overlay configured. Run: aidd-custom setup');
@@ -707,32 +675,23 @@ pluginCmd
   .description('Install a plugin')
   .action(async (name) => {
     const projectRoot = process.cwd();
-    const configPath = join(projectRoot, 'config', 'global.json');
-    
+
     console.log(`Installing plugin: ${name}...\n`);
-    
+
     const tool = detectTool(projectRoot);
     if (!tool) {
       console.error('Error: No AIDD tool detected');
       process.exit(1);
     }
-    
+
     const overlayConfig = getOverlayConfig(projectRoot);
-    
+
     if (!overlayConfig) {
       console.error('No overlay configured. Run: aidd-custom setup');
       return;
     }
-    
-    let pluginsConfig: Record<string, { installed: boolean }> = {};
-    if (existsSync(configPath)) {
-      try {
-        const configContent = readFileSync(configPath, 'utf-8');
-        const config = JSON.parse(configContent);
-        pluginsConfig = config.plugins || {};
-      } catch (e) {
-      }
-    }
+
+    const pluginsConfig = getGlobalPlugins();
     
     const tempDir = join(projectRoot, '.cache', 'aidd-custom', 'plugin-temp');
     if (existsSync(tempDir)) {
@@ -812,19 +771,7 @@ pluginCmd
       }
       
       pluginsConfig[name] = { installed: true };
-      
-      if (!existsSync(configPath)) {
-        const configDir = join(projectRoot, 'config');
-        if (!existsSync(configDir)) {
-          mkdirSync(configDir, { recursive: true });
-        }
-        writeFileSync(configPath, JSON.stringify({ overlay: overlayConfig, plugins: pluginsConfig }, null, 2));
-      } else {
-        const configContent = readFileSync(configPath, 'utf-8');
-        const config = JSON.parse(configContent);
-        config.plugins = pluginsConfig;
-        writeFileSync(configPath, JSON.stringify(config, null, 2));
-      }
+      saveGlobalPlugins(pluginsConfig);
       
       console.log(`\nPlugin "${name}" installed successfully`);
       
@@ -842,32 +789,23 @@ pluginCmd
   .description('Remove a plugin (only removes files installed via plugin add)')
   .action(async (name) => {
     const projectRoot = process.cwd();
-    
+
     console.log(`Removing plugin: ${name}...\n`);
-    
+
     const tool = detectTool(projectRoot);
     if (!tool) {
       console.error('Error: No AIDD tool detected');
       process.exit(1);
     }
-    
+
     const overlayConfig = getOverlayConfig(projectRoot);
-    const configPath = join(projectRoot, 'config', 'global.json');
-    
-    if (!overlayConfig && !existsSync(configPath)) {
+
+    if (!overlayConfig) {
       console.error('No configuration found. Run: aidd-custom setup');
       return;
     }
-    
-    let pluginsConfig: Record<string, { installed: boolean; files?: string[] }> = {};
-    if (existsSync(configPath)) {
-      try {
-        const configContent = readFileSync(configPath, 'utf-8');
-        const config = JSON.parse(configContent);
-        pluginsConfig = config.plugins || {};
-      } catch (e) {
-      }
-    }
+
+    const pluginsConfig: Record<string, { installed: boolean; files?: string[] }> = getGlobalPlugins();
     
     if (!pluginsConfig[name]) {
       console.log(`Plugin "${name}" is not installed`);
@@ -972,13 +910,7 @@ pluginCmd
       }
       
       delete pluginsConfig[name];
-      
-      if (existsSync(configPath)) {
-        const configContent = readFileSync(configPath, 'utf-8');
-        const config = JSON.parse(configContent);
-        config.plugins = pluginsConfig;
-        writeFileSync(configPath, JSON.stringify(config, null, 2));
-      }
+      saveGlobalPlugins(pluginsConfig);
       
       console.log(`\nPlugin "${name}" removed successfully`);
       
