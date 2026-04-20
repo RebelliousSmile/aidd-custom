@@ -5,7 +5,7 @@ import { join } from 'path';
 /**
  * Supported AI development tool types
  */
-export type ToolType = 'claude' | 'copilot' | 'cursor' | 'opencode';
+export type ToolType = 'opencode';
 
 /**
  * Content type to transform
@@ -39,9 +39,6 @@ export interface ToolConfig {
  * Directory structure for each tool
  */
 export const TOOL_DIRECTORIES: Record<ToolType, string[]> = {
-  claude: ['.claude'],
-  copilot: ['.github'],
-  cursor: ['.cursor'],
   opencode: ['.opencode'],
 };
 
@@ -49,57 +46,18 @@ export const TOOL_DIRECTORIES: Record<ToolType, string[]> = {
  * Tool configurations with specific transformation methods
  */
 export const TOOL_CONFIGS: Record<ToolType, ToolConfig> = {
-  claude: {
-    commandsDir: '.claude/commands/custom',
-    rulesDir: '.claude/rules/custom',
-    agentsDir: '.claude/agents/custom',
-    templatesDir: 'aidd_docs/templates/custom',
-    instructions: 'CLAUDE.md',
-    instructionsPath: null,
-    transform: {
-      commands: null,
-      rules: null,
-      agents: null,
-    },
-  },
   opencode: {
     commandsDir: '.opencode/commands/aidd/custom',
     rulesDir: '.opencode/rules/custom',
     agentsDir: '.opencode/agents/custom',
     templatesDir: 'aidd_docs/templates/custom',
-    instructions: 'AGENTS.md',
+    instructions: null,
     instructionsPath: null,
     configFile: 'opencode.json',
     transform: {
       commands: transformCommandsToOpenCode,
       rules: transformRulesToOpenCode,
       agents: transformAgentsToOpenCode,
-    },
-  },
-  cursor: {
-    commandsDir: '.cursor/commands',
-    rulesDir: '.cursor/rules',
-    agentsDir: '.cursor/agents',
-    templatesDir: 'aidd_docs/templates/custom',
-    instructions: '.mdc',
-    instructionsPath: '.cursor/rules',
-    transform: {
-      commands: transformCommandsToCursor,
-      rules: convertRuleToMdc,
-      agents: null,
-    },
-  },
-  copilot: {
-    commandsDir: '.github/prompts/custom',
-    rulesDir: '.github/instructions/custom',
-    agentsDir: '.github/agents',
-    templatesDir: 'aidd_docs/templates/custom',
-    instructions: 'copilot-instructions.md',
-    instructionsPath: '.github',
-    transform: {
-      commands: convertCommandToPrompt,
-      rules: convertRulesToCopilotInstructions,
-      agents: null,
     },
   },
 };
@@ -200,7 +158,7 @@ export function validateConfig(config: unknown): OverlayConfig {
  * Schema for manifest entries
  */
 export const ManifestEntrySchema = z.object({
-  tool: z.enum(['claude', 'copilot', 'cursor', 'opencode']),
+  tool: z.enum(['opencode']),
   version: z.string(),
   installedAt: z.string().datetime(),
   files: z.array(z.object({
@@ -317,9 +275,6 @@ export function parseCommandFrontmatter(content: string): CommandFrontmatter | n
  * Path mapping from source to tool-specific paths
  */
 export const PATH_TRANSFORMATIONS: Record<ToolType, (sourcePath: string) => string> = {
-  claude: (source: string) => source.replace(/^overlay\//, '.claude/'),
-  copilot: (source: string) => source.replace(/^overlay\//, '.github/'),
-  cursor: (source: string) => source.replace(/^overlay\//, '.cursor/'),
   opencode: (source: string) => source,
 };
 
@@ -336,9 +291,6 @@ export function transformPath(sourcePath: string, tool: ToolType): string {
  */
 export function getToolCustomDir(tool: ToolType): string {
   const dirs: Record<ToolType, string> = {
-    claude: '.claude/commands/custom',
-    copilot: '.github/prompts/custom',
-    cursor: '.cursor/commands',
     opencode: '.opencode/commands/aidd/custom',
   };
   return dirs[tool];
@@ -349,10 +301,7 @@ export function getToolCustomDir(tool: ToolType): string {
  */
 export function getToolRulesDir(tool: ToolType): string {
   const dirs: Record<ToolType, string> = {
-    claude: '.claude/rules/custom',
-    copilot: '.github/instructions',
-    cursor: '.cursor/rules',
-    opencode: '.opencode/rules',
+    opencode: '.opencode/rules/custom',
   };
   return dirs[tool];
 }
@@ -362,10 +311,7 @@ export function getToolRulesDir(tool: ToolType): string {
  */
 export function getToolAgentsDir(tool: ToolType): string {
   const dirs: Record<ToolType, string> = {
-    claude: '.claude/agents',
-    copilot: '.github/agents',
-    cursor: '.cursor/agents',
-    opencode: '.opencode/agents',
+    opencode: '.opencode/agents/custom',
   };
   return dirs[tool];
 }
@@ -381,37 +327,13 @@ export const TOOL_FEATURES: Record<ToolType, {
   instructions: string | null;
   instructionsPath: string | null;
 }> = {
-  claude: {
-    commands: true,
-    rules: true,
-    agents: true,
-    skills: true,
-    instructions: 'CLAUDE.md',
-    instructionsPath: null,
-  },
   opencode: {
     commands: true,
     rules: true,
     agents: true,
     skills: true,
-    instructions: 'AGENTS.md',
+    instructions: null,
     instructionsPath: null,
-  },
-  cursor: {
-    commands: true,
-    rules: true,
-    agents: false,
-    skills: false,
-    instructions: '.mdc',
-    instructionsPath: '.cursor/rules',
-  },
-  copilot: {
-    commands: false,
-    rules: true,
-    agents: false,
-    skills: false,
-    instructions: 'copilot-instructions.md',
-    instructionsPath: '.github',
   },
 };
 

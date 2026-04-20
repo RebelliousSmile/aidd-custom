@@ -5,7 +5,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const PACKAGE_ROOT = join(__dirname, '..');
 export const GLOBAL_CONFIG_FILE = join(PACKAGE_ROOT, 'config.json');
-export const DEFAULT_OVERLAY_REPO = 'RebelliousSmile/aidd-claude-custom';
+export const DEFAULT_OVERLAY_REPO = 'RebelliousSmile/aidd-opencode-custom';
 export function getGlobalConfig() {
     if (existsSync(GLOBAL_CONFIG_FILE)) {
         try {

@@ -2,7 +2,7 @@ import { z } from 'zod';
 /**
  * Supported AI development tool types
  */
-export type ToolType = 'claude' | 'copilot' | 'cursor' | 'opencode';
+export type ToolType = 'opencode';
 /**
  * Content type to transform
  */
@@ -93,7 +93,7 @@ export declare function validateConfig(config: unknown): OverlayConfig;
  * Schema for manifest entries
  */
 export declare const ManifestEntrySchema: z.ZodObject<{
-    tool: z.ZodEnum<["claude", "copilot", "cursor", "opencode"]>;
+    tool: z.ZodEnum<["opencode"]>;
     version: z.ZodString;
     installedAt: z.ZodString;
     files: z.ZodArray<z.ZodObject<{
@@ -110,7 +110,7 @@ export declare const ManifestEntrySchema: z.ZodObject<{
         hash: string;
     }>, "many">;
 }, "strip", z.ZodTypeAny, {
-    tool: "claude" | "copilot" | "cursor" | "opencode";
+    tool: "opencode";
     version: string;
     installedAt: string;
     files: {
@@ -119,7 +119,7 @@ export declare const ManifestEntrySchema: z.ZodObject<{
         hash: string;
     }[];
 }, {
-    tool: "claude" | "copilot" | "cursor" | "opencode";
+    tool: "opencode";
     version: string;
     installedAt: string;
     files: {
@@ -172,7 +172,7 @@ export declare const PluginEntrySchema: z.ZodObject<{
  */
 export declare const ManifestSchema: z.ZodObject<{
     baseOverlay: z.ZodOptional<z.ZodObject<{
-        tool: z.ZodEnum<["claude", "copilot", "cursor", "opencode"]>;
+        tool: z.ZodEnum<["opencode"]>;
         version: z.ZodString;
         installedAt: z.ZodString;
         files: z.ZodArray<z.ZodObject<{
@@ -189,7 +189,7 @@ export declare const ManifestSchema: z.ZodObject<{
             hash: string;
         }>, "many">;
     }, "strip", z.ZodTypeAny, {
-        tool: "claude" | "copilot" | "cursor" | "opencode";
+        tool: "opencode";
         version: string;
         installedAt: string;
         files: {
@@ -198,7 +198,7 @@ export declare const ManifestSchema: z.ZodObject<{
             hash: string;
         }[];
     }, {
-        tool: "claude" | "copilot" | "cursor" | "opencode";
+        tool: "opencode";
         version: string;
         installedAt: string;
         files: {
@@ -255,7 +255,7 @@ export declare const ManifestSchema: z.ZodObject<{
         name: string;
     }>;
     baseOverlay?: {
-        tool: "claude" | "copilot" | "cursor" | "opencode";
+        tool: "opencode";
         version: string;
         installedAt: string;
         files: {
@@ -276,7 +276,7 @@ export declare const ManifestSchema: z.ZodObject<{
         name: string;
     }>;
     baseOverlay?: {
-        tool: "claude" | "copilot" | "cursor" | "opencode";
+        tool: "opencode";
         version: string;
         installedAt: string;
         files: {

@@ -36,13 +36,9 @@ aidd-custom plugin remove <name>
 npm install aidd-custom
 ```
 
-## Two-Layer System
+## Simplified System
 
-### 1. Base Overlay (always installed)
-Files from `overlay/` directory installed on every `aidd install`.
-
-### 2. Optional Plugins
-Additional packages from `plugins/` that can be installed/removed.
+The project has been simplified to support only OpenCode. All references to Claude, Copilot, and Cursor have been removed.
 
 ## Structure
 
@@ -51,11 +47,13 @@ Additional packages from `plugins/` that can be installed/removed.
 ├── .aidd/
 │   └── config.json     # Configuration (repo, branch)
 ├── .opencode/
-│   └── commands/overlay/ # Overlay commands
-├── overlay/             # Base files (commands, rules, agents, skills)
-├── plugins/             # Optional plugins
-├── opencode.json
-└── AGENTS.md
+│   └── commands/aidd/custom/ # Overlay commands
+│   └── rules/custom/ # Overlay rules
+│   └── agents/custom/ # Overlay agents
+│   └── skills/ # Overlay skills
+├── .mistral/
+│   └── instructions.md # Mistral instructions
+└── aidd_docs/templates/custom/ # Templates
 ```
 
 ## Overlay Commands
@@ -70,17 +68,6 @@ aidd-custom plugin list     # List available plugins
 aidd-custom plugin add     # Install a plugin
 aidd-custom plugin remove  # Remove a plugin
 ```
-
-## Tool Detection
-
-Auto-detects AIDD tool and installs to correct directories:
-
-| Tool | Directory | Commands | Rules | Agents | Skills |
-|------|----------|----------|-------|--------|--------|
-| Claude | `.claude/` | `commands/custom/` | `rules/custom/` | `agents/custom/` | `skills/custom/` |
-| Copilot | `.github/` | `prompts/custom/` | `instructions/custom/` | `agents/custom/` | `skills/custom/` |
-| Cursor | `.cursor/` | `commands/custom/` | `rules/custom/` | `agents/custom/` | `skills/custom/` |
-| OpenCode | `.opencode/` | `commands/custom/` | `rules/custom/` | `agents/custom/` | `skills/custom/` |
 
 ## Configuration
 
@@ -104,6 +91,8 @@ private-repo/
 │   ├── rules/
 │   ├── agents/
 │   └── skills/
+│   └── mistral/
+│       └── instructions.md
 ├── plugins/          # Optional plugins
 │   ├── my-plugin-1/
 │   │   ├── version.txt
@@ -112,3 +101,11 @@ private-repo/
 │   └── index.json   # Plugin list
 └── README.md
 ```
+
+## Changes Made
+
+1. **Removed CLAUDE.md and AGENTS.md overwriting**: The system no longer overwrites these files, preventing data loss.
+2. **Simplified to OpenCode only**: All code related to Claude, Copilot, and Cursor has been removed.
+3. **Cleaner installation**: Installation now only targets `.opencode/` directory structure.
+4. **Added Mistral support**: Installation now creates a `.mistral/` directory with an `instructions.md` file from the overlay repository.
+5. **Clean command updated**: The clean command now also removes the `.mistral/` directory.

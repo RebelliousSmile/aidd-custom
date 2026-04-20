@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
-import { detectTool, detectAllTools, getToolCustomDir, getToolRulesDir, getToolAgentsDir, getToolConfig, getFileCount, getPluginCounts, validateOverlaySync, hasFeature, } from './index.js';
+import { detectTool, detectAllTools, validateOverlaySync, hasFeature, getToolConfig, getToolCustomDir, getToolRulesDir, getToolAgentsDir, getFileCount, getPluginCounts, } from './index.js';
 import { getOverlayConfig, getGlobalConfig, getGlobalPlugins, saveGlobalPlugins, GLOBAL_CONFIG_FILE } from './config.js';
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, cpSync, rmSync, statSync } from 'fs';
 import { join, dirname, relative, basename } from 'path';
@@ -73,7 +73,7 @@ program
     console.log('Installing aidd-custom overlay...\n');
     const tools = detectAllTools(process.cwd());
     if (tools.length === 0) {
-        console.error('Error: No AIDD tool detected (.claude, .github, .cursor, .opencode)');
+        console.error('Error: No AIDD tool detected (.opencode)');
         process.exit(1);
     }
     console.log(`Detected tools: ${tools.join(', ')}\n`);
@@ -195,7 +195,7 @@ program
                 }
                 if (hasFeature(tool, 'skills')) {
                     const skillsSourcePath = join(tempDir, 'skills');
-                    const skillsDir = tool === 'claude' ? '.claude/skills' : '.opencode/skills';
+                    const skillsDir = '.opencode/skills';
                     const skillsDestPath = join(projectRoot, skillsDir);
                     if (existsSync(skillsSourcePath)) {
                         if (!existsSync(skillsDestPath)) {
@@ -204,86 +204,6 @@ program
                         cpSync(skillsSourcePath, skillsDestPath, { recursive: true });
                         const count = getFileCount(skillsDestPath);
                         console.log(`Installed: ${skillsDir} (${count} skills)`);
-                    }
-                }
-                const instructionsFile = toolConfig.instructions;
-                const instructionsPath = toolConfig.instructionsPath;
-                if (tool === 'copilot') {
-                    const copilotInstructionsPath = join(projectRoot, '.github', 'copilot-instructions.md');
-                    if (!existsSync(copilotInstructionsPath) && !existsSync(join(projectRoot, '.github', 'instructions'))) {
-                        console.log('Skipping Copilot (no .github/copilot-instructions.md or .github/instructions/)');
-                    }
-                    else {
-                        const promptsSourcePath = join(tempDir, 'prompts', 'custom');
-                        const promptsDestPath = join(projectRoot, toolConfig.commandsDir);
-                        if (existsSync(promptsSourcePath)) {
-                            if (!existsSync(promptsDestPath)) {
-                                mkdirSync(promptsDestPath, { recursive: true });
-                            }
-                            const files = readdirSync(promptsSourcePath).filter(f => f.endsWith('.md'));
-                            for (const file of files) {
-                                const srcFile = join(promptsSourcePath, file);
-                                const destFile = join(promptsDestPath, file);
-                                cpSync(srcFile, destFile);
-                            }
-                            console.log(`Installed: ${toolConfig.commandsDir} (${files.length} prompts)`);
-                        }
-                        else {
-                            const commandsSourcePath = join(tempDir, 'commands', 'custom');
-                            if (existsSync(commandsSourcePath)) {
-                                const transformFn = toolConfig.transform.commands;
-                                mkdirSync(promptsDestPath, { recursive: true });
-                                const files = collectMdFiles(commandsSourcePath);
-                                for (const file of files) {
-                                    const srcFile = join(commandsSourcePath, file);
-                                    const destFile = join(promptsDestPath, basename(file).replace('.md', '.prompt.md'));
-                                    const content = readFileSync(srcFile, 'utf-8');
-                                    if (transformFn) {
-                                        const transformed = transformFn(content, basename(file));
-                                        writeFileSync(destFile, transformed);
-                                    }
-                                    else {
-                                        cpSync(srcFile, destFile);
-                                    }
-                                }
-                                console.log(`Installed: ${toolConfig.commandsDir} (${files.length} converted prompts)`);
-                            }
-                        }
-                    }
-                }
-                if (instructionsFile && instructionsPath) {
-                    let sourceInstructions = null;
-                    if (tool === 'copilot') {
-                        sourceInstructions = join(tempDir, 'instructions', 'copilot-instructions.md');
-                    }
-                    else {
-                        sourceInstructions = join(tempDir, 'instructions', instructionsFile);
-                    }
-                    if (sourceInstructions && existsSync(sourceInstructions)) {
-                        const destPath = join(projectRoot, instructionsPath, instructionsFile);
-                        const destDir = join(projectRoot, instructionsPath);
-                        if (!existsSync(destDir)) {
-                            mkdirSync(destDir, { recursive: true });
-                        }
-                        cpSync(sourceInstructions, destPath);
-                        console.log(`Installed: ${instructionsPath}/${instructionsFile}`);
-                    }
-                }
-                else if (instructionsFile) {
-                    const sourceInstructions = join(tempDir, 'instructions', instructionsFile);
-                    if (existsSync(sourceInstructions)) {
-                        const destPath = join(projectRoot, instructionsFile);
-                        cpSync(sourceInstructions, destPath);
-                        console.log(`Installed: ${instructionsFile} (project root)`);
-                    }
-                }
-                const configFile = toolConfig.configFile;
-                if (configFile) {
-                    const sourceConfig = join(tempDir, 'instructions', configFile);
-                    if (existsSync(sourceConfig)) {
-                        const destConfig = join(projectRoot, configFile);
-                        cpSync(sourceConfig, destConfig);
-                        console.log(`Installed: ${configFile} (project root)`);
                     }
                 }
             }
@@ -299,6 +219,16 @@ program
                 cpSync(templatesSourcePath, templatesDestPath, { recursive: true });
                 const count = getFileCount(templatesDestPath);
                 console.log(`\nInstalled: templates to aidd_docs/templates/custom (${count} files)`);
+            }
+            const mistralInstructionsSourcePath = join(tempDir, 'mistral', 'instructions.md');
+            const mistralDir = join(projectRoot, '.mistral');
+            const mistralInstructionsDestPath = join(mistralDir, 'instructions.md');
+            if (existsSync(mistralInstructionsSourcePath)) {
+                if (!existsSync(mistralDir)) {
+                    mkdirSync(mistralDir, { recursive: true });
+                }
+                cpSync(mistralInstructionsSourcePath, mistralInstructionsDestPath);
+                console.log(`\nInstalled: .mistral/instructions.md`);
             }
             rmSync(tempDir, { recursive: true, force: true });
         }
@@ -355,42 +285,11 @@ program
             }
         }
         if (hasFeature(tool, 'skills')) {
-            const skillsDir = tool === 'claude' ? '.claude/skills' : '.opencode/skills';
+            const skillsDir = '.opencode/skills';
             if (existsSync(join(projectRoot, skillsDir))) {
                 const count = getFileCount(join(projectRoot, skillsDir));
                 rmSync(join(projectRoot, skillsDir), { recursive: true, force: true });
                 console.log(`Removed: ${skillsDir} (${count} skills)`);
-                cleaned++;
-            }
-        }
-        if (tool === 'copilot') {
-            const copilotInstructionsDir = join(projectRoot, '.github', 'instructions', 'custom');
-            if (existsSync(copilotInstructionsDir)) {
-                const count = getFileCount(copilotInstructionsDir);
-                rmSync(copilotInstructionsDir, { recursive: true, force: true });
-                console.log(`Removed: .github/instructions/custom (${count} files)`);
-                cleaned++;
-            }
-            const copilotPromptsDir = join(projectRoot, '.github', 'prompts', 'custom');
-            if (existsSync(copilotPromptsDir)) {
-                const count = getFileCount(copilotPromptsDir);
-                rmSync(copilotPromptsDir, { recursive: true, force: true });
-                console.log(`Removed: .github/prompts/custom (${count} files)`);
-                cleaned++;
-            }
-            const copilotInstructionsFile = join(projectRoot, '.github', 'copilot-instructions.md');
-            if (existsSync(copilotInstructionsFile)) {
-                rmSync(copilotInstructionsFile, { force: true });
-                console.log(`Removed: .github/copilot-instructions.md`);
-                cleaned++;
-            }
-        }
-        if (tool === 'cursor') {
-            const cursorInstructionsDir = join(projectRoot, '.cursor', 'rules');
-            if (existsSync(cursorInstructionsDir)) {
-                const count = getFileCount(cursorInstructionsDir);
-                rmSync(cursorInstructionsDir, { recursive: true, force: true });
-                console.log(`Removed: .cursor/rules (${count} files)`);
                 cleaned++;
             }
         }
@@ -399,6 +298,13 @@ program
         const count = getFileCount(join(projectRoot, templatesDir));
         rmSync(join(projectRoot, templatesDir), { recursive: true, force: true });
         console.log(`Removed: ${templatesDir} (${count} files)`);
+        cleaned++;
+    }
+    const mistralDir = join(projectRoot, '.mistral');
+    if (existsSync(mistralDir)) {
+        const count = getFileCount(mistralDir);
+        rmSync(mistralDir, { recursive: true, force: true });
+        console.log(`Removed: .mistral (${count} files)`);
         cleaned++;
     }
     const plugins = getGlobalPlugins();
@@ -675,6 +581,16 @@ pluginCmd
             console.log(`  Templates installed`);
             installed++;
         }
+        const skillsSrc = join(pluginDir, 'skills');
+        if (existsSync(skillsSrc)) {
+            const skillsDest = join(projectRoot, '.opencode/skills');
+            if (!existsSync(skillsDest)) {
+                mkdirSync(skillsDest, { recursive: true });
+            }
+            cpSync(skillsSrc, skillsDest, { recursive: true });
+            console.log(`  Skills installed`);
+            installed++;
+        }
         pluginsConfig[name] = { installed: true };
         saveGlobalPlugins(pluginsConfig);
         console.log(`\nPlugin "${name}" installed successfully`);
@@ -693,7 +609,8 @@ pluginCmd
     .description('Remove a plugin (only removes files installed via plugin add)')
     .action(async (name) => {
     const projectRoot = process.cwd();
-    console.log(`Removing plugin: ${name}...\n`);
+    console.log(`Removing plugin: ${name}...
+`);
     const tool = detectTool(projectRoot);
     if (!tool) {
         console.error('Error: No AIDD tool detected');
@@ -797,6 +714,18 @@ pluginCmd
                 }
                 else {
                     console.log(`  Note: templates not removed (belong to overlay or shared)`);
+                }
+            }
+            const skillsSrc = join(pluginDir, 'skills');
+            if (existsSync(skillsSrc)) {
+                const skillsDest = join(projectRoot, '.opencode/skills');
+                const skillFiles = readdirSync(skillsSrc);
+                for (const f of skillFiles) {
+                    const skillPath = join(skillsDest, f);
+                    if (existsSync(skillPath)) {
+                        rmSync(skillPath, { force: true });
+                        console.log(`  Removed: skills/${f}`);
+                    }
                 }
             }
         }

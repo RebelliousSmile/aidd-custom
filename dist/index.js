@@ -5,66 +5,24 @@ import { join } from 'path';
  * Directory structure for each tool
  */
 export const TOOL_DIRECTORIES = {
-    claude: ['.claude'],
-    copilot: ['.github'],
-    cursor: ['.cursor'],
     opencode: ['.opencode'],
 };
 /**
  * Tool configurations with specific transformation methods
  */
 export const TOOL_CONFIGS = {
-    claude: {
-        commandsDir: '.claude/commands/custom',
-        rulesDir: '.claude/rules/custom',
-        agentsDir: '.claude/agents/custom',
-        templatesDir: 'aidd_docs/templates/custom',
-        instructions: 'CLAUDE.md',
-        instructionsPath: null,
-        transform: {
-            commands: null,
-            rules: null,
-            agents: null,
-        },
-    },
     opencode: {
         commandsDir: '.opencode/commands/aidd/custom',
         rulesDir: '.opencode/rules/custom',
         agentsDir: '.opencode/agents/custom',
         templatesDir: 'aidd_docs/templates/custom',
-        instructions: 'AGENTS.md',
+        instructions: null,
         instructionsPath: null,
         configFile: 'opencode.json',
         transform: {
             commands: transformCommandsToOpenCode,
             rules: transformRulesToOpenCode,
             agents: transformAgentsToOpenCode,
-        },
-    },
-    cursor: {
-        commandsDir: '.cursor/commands',
-        rulesDir: '.cursor/rules',
-        agentsDir: '.cursor/agents',
-        templatesDir: 'aidd_docs/templates/custom',
-        instructions: '.mdc',
-        instructionsPath: '.cursor/rules',
-        transform: {
-            commands: transformCommandsToCursor,
-            rules: convertRuleToMdc,
-            agents: null,
-        },
-    },
-    copilot: {
-        commandsDir: '.github/prompts/custom',
-        rulesDir: '.github/instructions/custom',
-        agentsDir: '.github/agents',
-        templatesDir: 'aidd_docs/templates/custom',
-        instructions: 'copilot-instructions.md',
-        instructionsPath: '.github',
-        transform: {
-            commands: convertCommandToPrompt,
-            rules: convertRulesToCopilotInstructions,
-            agents: null,
         },
     },
 };
@@ -155,7 +113,7 @@ export function validateConfig(config) {
  * Schema for manifest entries
  */
 export const ManifestEntrySchema = z.object({
-    tool: z.enum(['claude', 'copilot', 'cursor', 'opencode']),
+    tool: z.enum(['opencode']),
     version: z.string(),
     installedAt: z.string().datetime(),
     files: z.array(z.object({
@@ -250,9 +208,6 @@ export function parseCommandFrontmatter(content) {
  * Path mapping from source to tool-specific paths
  */
 export const PATH_TRANSFORMATIONS = {
-    claude: (source) => source.replace(/^overlay\//, '.claude/'),
-    copilot: (source) => source.replace(/^overlay\//, '.github/'),
-    cursor: (source) => source.replace(/^overlay\//, '.cursor/'),
     opencode: (source) => source,
 };
 /**
@@ -267,9 +222,6 @@ export function transformPath(sourcePath, tool) {
  */
 export function getToolCustomDir(tool) {
     const dirs = {
-        claude: '.claude/commands/custom',
-        copilot: '.github/prompts/custom',
-        cursor: '.cursor/commands',
         opencode: '.opencode/commands/aidd/custom',
     };
     return dirs[tool];
@@ -279,10 +231,7 @@ export function getToolCustomDir(tool) {
  */
 export function getToolRulesDir(tool) {
     const dirs = {
-        claude: '.claude/rules/custom',
-        copilot: '.github/instructions',
-        cursor: '.cursor/rules',
-        opencode: '.opencode/rules',
+        opencode: '.opencode/rules/custom',
     };
     return dirs[tool];
 }
@@ -291,10 +240,7 @@ export function getToolRulesDir(tool) {
  */
 export function getToolAgentsDir(tool) {
     const dirs = {
-        claude: '.claude/agents',
-        copilot: '.github/agents',
-        cursor: '.cursor/agents',
-        opencode: '.opencode/agents',
+        opencode: '.opencode/agents/custom',
     };
     return dirs[tool];
 }
@@ -302,37 +248,13 @@ export function getToolAgentsDir(tool) {
  * Tool features support mapping
  */
 export const TOOL_FEATURES = {
-    claude: {
-        commands: true,
-        rules: true,
-        agents: true,
-        skills: true,
-        instructions: 'CLAUDE.md',
-        instructionsPath: null,
-    },
     opencode: {
         commands: true,
         rules: true,
         agents: true,
         skills: true,
-        instructions: 'AGENTS.md',
+        instructions: null,
         instructionsPath: null,
-    },
-    cursor: {
-        commands: true,
-        rules: true,
-        agents: false,
-        skills: false,
-        instructions: '.mdc',
-        instructionsPath: '.cursor/rules',
-    },
-    copilot: {
-        commands: false,
-        rules: true,
-        agents: false,
-        skills: false,
-        instructions: 'copilot-instructions.md',
-        instructionsPath: '.github',
     },
 };
 /**

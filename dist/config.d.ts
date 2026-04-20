@@ -1,5 +1,5 @@
 export declare const GLOBAL_CONFIG_FILE: string;
-export declare const DEFAULT_OVERLAY_REPO = "RebelliousSmile/aidd-claude-custom";
+export declare const DEFAULT_OVERLAY_REPO = "RebelliousSmile/aidd-opencode-custom";
 export declare function getGlobalConfig(): {
     repo: string;
     branch: string;
