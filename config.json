@@ -3,9 +3,5 @@
     "repo": "RebelliousSmile/aidd-claude-custom",
     "branch": "main"
   },
-  "plugins": {
-    "ada": {
-      "installed": true
-    }
-  }
+  "plugins": {}
 }
