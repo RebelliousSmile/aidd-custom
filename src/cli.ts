@@ -14,6 +14,7 @@ import {
   checkInstallStatus,
   compareWithOverlay,
   repairFromOverlay,
+  rehashFromDisk,
 } from './operations.js';
 import { mkdirSync, rmSync, writeFileSync } from 'fs';
 import { join, dirname } from 'path';
@@ -173,6 +174,20 @@ program
       if (tempDir) rmSync(tempDir, { recursive: true, force: true });
     }
 
+  });
+
+program
+  .command('rehash')
+  .description('Compute hash baseline from installed files (no reinstall needed)')
+  .option('--global', 'Rehash global ~/.claude install')
+  .action(async (options) => {
+    const rootDir = options.global ? GLOBAL_CLAUDE_DIR : process.cwd();
+    const { updated, missing } = rehashFromDisk(rootDir, options.global ?? false);
+    if (updated === 0 && missing === 0) {
+      console.log('No manifest found — run "install" first');
+      process.exit(1);
+    }
+    console.log(`✓ Hash baseline computed: ${updated} file(s) hashed${missing > 0 ? `, ${missing} missing from disk` : ''}`);
   });
 
 program

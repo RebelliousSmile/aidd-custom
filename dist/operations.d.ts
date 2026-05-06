@@ -15,6 +15,10 @@ export declare function installTemplates(projectRoot: string, overlayTempDir: st
 export declare function installGlobalOverlay(globalRoot: string, overlayTempDir: string, hashes?: Record<string, string>, write?: boolean): string[];
 export declare function cleanByIndex(rootDir: string, isGlobal?: boolean): number;
 export declare function repairFromOverlay(rootDir: string, overlayTempDir: string, isGlobal?: boolean): string[];
+export declare function rehashFromDisk(rootDir: string, isGlobal?: boolean): {
+    updated: number;
+    missing: number;
+};
 export interface InstallStatus {
     notIndexed: boolean;
     repo: string | null;

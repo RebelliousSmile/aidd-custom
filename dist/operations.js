@@ -300,6 +300,24 @@ export function repairFromOverlay(rootDir, overlayTempDir, isGlobal = false) {
     writeOverlayIndex(rootDir, { ...index, installedAt: new Date().toISOString(), files }, isGlobal);
     return files;
 }
+// ─── rehash ───────────────────────────────────────────────────────────────────
+export function rehashFromDisk(rootDir, isGlobal = false) {
+    const index = readOverlayIndex(rootDir, isGlobal);
+    if (!index)
+        return { updated: 0, missing: 0 };
+    const hashes = {};
+    let missing = 0;
+    for (const file of index.files) {
+        const fullPath = join(rootDir, file);
+        if (!existsSync(fullPath)) {
+            missing++;
+            continue;
+        }
+        hashes[file] = hashContent(readFileSync(fullPath));
+    }
+    writeOverlayIndex(rootDir, { ...index, hashes }, isGlobal);
+    return { updated: Object.keys(hashes).length, missing };
+}
 export function checkInstallStatus(rootDir, isGlobal = false) {
     const index = readOverlayIndex(rootDir, isGlobal);
     if (!index) {
