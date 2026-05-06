@@ -1,17 +1,81 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, cpSync, rmSync, statSync } from 'fs';
 import { join, dirname, relative } from 'path';
+import { createHash } from 'crypto';
 import { getToolConfig, getFileCount, hasFeature, } from './index.js';
-const PROJECT_INDEX = join('.aidd', 'overlay.json');
+const PROJECT_INDEX = join('.aidd', 'manifest.json');
 const GLOBAL_INDEX = 'aidd-overlay.json';
 function indexPath(rootDir, isGlobal) {
     return isGlobal ? join(rootDir, GLOBAL_INDEX) : join(rootDir, PROJECT_INDEX);
+}
+function md5File(absPath) {
+    if (!existsSync(absPath))
+        return '0'.repeat(32);
+    return createHash('md5').update(readFileSync(absPath)).digest('hex');
+}
+// Build aidd-cli v2 manifest: { version: 2, repo, tools: { [id]: { version, files, mergeFiles, excludedMcp } }, docs, scripts }
+function toAiddV2(rootDir, index) {
+    const toolIds = index.tools ?? [];
+    const toolEntries = {};
+    // Build a set of file paths claimed by each tool based on known destination dirs
+    const claimedByTool = new Map();
+    for (const tool of toolIds) {
+        claimedByTool.set(tool, new Set());
+    }
+    for (const relPath of index.files) {
+        let claimed = false;
+        for (const tool of toolIds) {
+            const cfg = getToolConfig(tool);
+            const dirs = [cfg.commandsDir, cfg.agentsDir, cfg.rulesDir, ...(cfg.skillsDir ? [cfg.skillsDir] : [])];
+            if (dirs.some(d => relPath.startsWith(d + '/') || relPath === d)) {
+                claimedByTool.get(tool).add(relPath);
+                claimed = true;
+                break;
+            }
+        }
+        // Unclaimed files (e.g. templates) go to the first tool
+        if (!claimed && toolIds.length > 0) {
+            claimedByTool.get(toolIds[0]).add(relPath);
+        }
+    }
+    for (const tool of toolIds) {
+        const files = [...(claimedByTool.get(tool) ?? [])].map(relPath => ({
+            relativePath: relPath,
+            hash: md5File(join(rootDir, relPath)),
+        }));
+        toolEntries[tool] = { version: index.branch, files, mergeFiles: [], excludedMcp: [] };
+    }
+    return {
+        version: 2,
+        repo: index.repo,
+        tools: toolEntries,
+        docs: null,
+        scripts: null,
+        installedAt: index.installedAt,
+    };
+}
+// Parse aidd-cli v2 manifest back into our OverlayIndex
+function fromAiddV2(raw) {
+    const toolsRaw = (raw.tools ?? {});
+    const toolIds = Object.keys(toolsRaw);
+    const files = toolIds.flatMap(id => (toolsRaw[id]?.files ?? []).map(f => f.relativePath));
+    const branch = toolIds.length > 0 ? (toolsRaw[toolIds[0]]?.version ?? '') : '';
+    return {
+        repo: typeof raw.repo === 'string' ? raw.repo : '',
+        branch,
+        installedAt: typeof raw.installedAt === 'string' ? raw.installedAt : new Date().toISOString(),
+        files,
+        tools: toolIds,
+    };
 }
 export function readOverlayIndex(rootDir, isGlobal = false) {
     const p = indexPath(rootDir, isGlobal);
     if (!existsSync(p))
         return null;
     try {
-        return JSON.parse(readFileSync(p, 'utf-8'));
+        const raw = JSON.parse(readFileSync(p, 'utf-8'));
+        if (!isGlobal && raw.version === 2)
+            return fromAiddV2(raw);
+        return raw;
     }
     catch {
         return null;
@@ -20,7 +84,8 @@ export function readOverlayIndex(rootDir, isGlobal = false) {
 export function writeOverlayIndex(rootDir, index, isGlobal = false) {
     const p = indexPath(rootDir, isGlobal);
     mkdirSync(dirname(p), { recursive: true });
-    writeFileSync(p, JSON.stringify(index, null, 2));
+    const payload = isGlobal ? index : toAiddV2(rootDir, index);
+    writeFileSync(p, JSON.stringify(payload, null, 2));
 }
 export function deleteOverlayIndex(rootDir, isGlobal = false) {
     const p = indexPath(rootDir, isGlobal);
@@ -51,41 +116,61 @@ function listAllFiles(dir) {
     walk(dir);
     return results;
 }
-// Route files from flat 'aidd/' dir: NN_ prefix → command, NN- prefix → rule
+// Install commands from commands/ directory (flat NN_name.md files)
+// and rules from rules/ directory (flat NN-name.md files)
 function installAiddContent(tool, projectRoot, overlayTempDir, installed) {
     const cfg = getToolConfig(tool);
-    const srcDir = join(overlayTempDir, 'aidd');
-    if (!existsSync(srcDir))
-        return;
-    const files = readdirSync(srcDir).filter(f => f.endsWith('.md'));
-    for (const file of files) {
-        const cmdMatch = file.match(/^(\d+)_/);
-        const ruleMatch = file.match(/^(\d+)-/);
-        if (cmdMatch && hasFeature(tool, 'commands')) {
-            const num = cmdMatch[1];
-            const destDir = join(projectRoot, cfg.commandsDir, num);
-            mkdirSync(destDir, { recursive: true });
-            const content = readFileSync(join(srcDir, file), 'utf-8');
-            writeFileSync(join(destDir, file), applyTransform(cfg.transform.commands, content, file));
-            installed.push(norm(join(cfg.commandsDir, num, file)));
+    if (hasFeature(tool, 'commands') || tool === 'copilot') {
+        const cmdSrc = join(overlayTempDir, 'commands');
+        if (existsSync(cmdSrc)) {
+            for (const file of readdirSync(cmdSrc).filter(f => f.endsWith('.md') && /^\d+_/.test(f))) {
+                const match = file.match(/^(\d+)_(.+)$/);
+                const num = match[1];
+                const baseName = match[2]; // strip NN_ prefix
+                const destDir = join(projectRoot, cfg.commandsDir, 'aidd', num);
+                mkdirSync(destDir, { recursive: true });
+                const content = readFileSync(join(cmdSrc, file), 'utf-8');
+                if (tool === 'copilot') {
+                    const destFile = baseName.replace(/\.md$/, '.prompt.md');
+                    writeFileSync(join(destDir, destFile), applyTransform(cfg.transform.commands, content, file));
+                    installed.push(norm(join(cfg.commandsDir, 'aidd', num, destFile)));
+                }
+                else {
+                    writeFileSync(join(destDir, baseName), applyTransform(cfg.transform.commands, content, file));
+                    installed.push(norm(join(cfg.commandsDir, 'aidd', num, baseName)));
+                }
+            }
         }
-        else if (cmdMatch && tool === 'copilot') {
-            const num = cmdMatch[1];
-            const destDir = join(projectRoot, cfg.commandsDir, num);
-            mkdirSync(destDir, { recursive: true });
-            // Copilot expects prompt files as .prompt.md
-            const destFile = file.replace('.md', '.prompt.md');
-            const content = readFileSync(join(srcDir, file), 'utf-8');
-            writeFileSync(join(destDir, destFile), applyTransform(cfg.transform.commands, content, file));
-            installed.push(norm(join(cfg.commandsDir, num, destFile)));
-        }
-        else if (ruleMatch && hasFeature(tool, 'rules')) {
-            const num = ruleMatch[1];
-            const destDir = join(projectRoot, cfg.rulesDir, num);
-            mkdirSync(destDir, { recursive: true });
-            const content = readFileSync(join(srcDir, file), 'utf-8');
-            writeFileSync(join(destDir, file), applyTransform(cfg.transform.rules, content, file));
-            installed.push(norm(join(cfg.rulesDir, num, file)));
+    }
+    if (hasFeature(tool, 'rules')) {
+        const rulesSrc = join(overlayTempDir, 'rules');
+        if (existsSync(rulesSrc)) {
+            // Snapshot existing taxonomy dirs before the loop: num → single dir name (or '' if ambiguous)
+            const rulesBaseDir = join(projectRoot, cfg.rulesDir);
+            const taxonomyByNum = new Map();
+            if (existsSync(rulesBaseDir)) {
+                for (const d of readdirSync(rulesBaseDir)) {
+                    if (!statSync(join(rulesBaseDir, d)).isDirectory())
+                        continue;
+                    const m = d.match(/^(\d+)-/);
+                    if (!m)
+                        continue;
+                    const n = m[1];
+                    taxonomyByNum.set(n, taxonomyByNum.has(n) ? '' : d); // '' = ambiguous
+                }
+            }
+            for (const file of readdirSync(rulesSrc).filter(f => f.endsWith('.md') && /^\d+-/.test(f))) {
+                const match = file.match(/^(\d+)-(.+)$/);
+                const num = match[1];
+                const baseName = match[2]; // strip NN- prefix, e.g. "challenge-plan.md"
+                const existing = taxonomyByNum.get(num);
+                const taxonomy = existing || file.replace(/\.md$/, ''); // fallback: NN-name
+                const destDir = join(projectRoot, cfg.rulesDir, taxonomy);
+                mkdirSync(destDir, { recursive: true });
+                const content = readFileSync(join(rulesSrc, file), 'utf-8');
+                writeFileSync(join(destDir, baseName), applyTransform(cfg.transform.rules, content, file));
+                installed.push(norm(join(cfg.rulesDir, taxonomy, baseName)));
+            }
         }
     }
 }
@@ -130,15 +215,16 @@ export function installTemplates(projectRoot, overlayTempDir) {
 }
 export function installGlobalOverlay(globalRoot, overlayTempDir) {
     const installed = [];
-    const aiddSrc = join(overlayTempDir, 'aidd');
-    if (existsSync(aiddSrc)) {
-        const cmdFiles = readdirSync(aiddSrc).filter(f => f.endsWith('.md') && /^\d+_/.test(f));
-        for (const file of cmdFiles) {
-            const num = file.match(/^(\d+)_/)[1];
-            const destDir = join(globalRoot, 'commands', num);
+    const cmdsSrc = join(overlayTempDir, 'commands');
+    if (existsSync(cmdsSrc)) {
+        for (const file of readdirSync(cmdsSrc).filter(f => f.endsWith('.md') && /^\d+_/.test(f))) {
+            const match = file.match(/^(\d+)_(.+)$/);
+            const num = match[1];
+            const baseName = match[2];
+            const destDir = join(globalRoot, 'commands', 'aidd', num);
             mkdirSync(destDir, { recursive: true });
-            cpSync(join(aiddSrc, file), join(destDir, file));
-            installed.push(norm(join('commands', num, file)));
+            cpSync(join(cmdsSrc, file), join(destDir, baseName));
+            installed.push(norm(join('commands', 'aidd', num, baseName)));
         }
     }
     const agentsSrc = join(overlayTempDir, 'agents');
@@ -165,11 +251,24 @@ export function cleanByIndex(rootDir, isGlobal = false) {
     if (!index)
         return 0;
     let removed = 0;
+    const dirsToCheck = new Set();
     for (const file of index.files) {
         const fullPath = join(rootDir, file);
+        // Collect parent dirs unconditionally — file may have been manually deleted
+        let dir = dirname(fullPath);
+        while (dir.startsWith(rootDir) && dir !== rootDir) {
+            dirsToCheck.add(dir);
+            dir = dirname(dir);
+        }
         if (existsSync(fullPath)) {
             rmSync(fullPath, { force: true });
             removed++;
+        }
+    }
+    // Remove empty dirs deepest-first
+    for (const dir of [...dirsToCheck].sort((a, b) => b.length - a.length)) {
+        if (existsSync(dir) && readdirSync(dir).length === 0) {
+            rmSync(dir, { recursive: true, force: true });
         }
     }
     deleteOverlayIndex(rootDir, isGlobal);
@@ -214,14 +313,16 @@ export function checkInstallStatus(rootDir, isGlobal = false) {
 function countToolOverlay(tool, overlayTempDir) {
     const cfg = getToolConfig(tool);
     let count = 0;
-    const aiddSrc = join(overlayTempDir, 'aidd');
-    if (existsSync(aiddSrc)) {
-        const files = readdirSync(aiddSrc).filter(f => f.endsWith('.md'));
-        if (hasFeature(tool, 'commands') || tool === 'copilot') {
-            count += files.filter(f => /^\d+_/.test(f)).length;
+    if (hasFeature(tool, 'commands') || tool === 'copilot') {
+        const cmdSrc = join(overlayTempDir, 'commands');
+        if (existsSync(cmdSrc)) {
+            count += readdirSync(cmdSrc).filter(f => f.endsWith('.md') && /^\d+_/.test(f)).length;
         }
-        if (hasFeature(tool, 'rules')) {
-            count += files.filter(f => /^\d+-/.test(f)).length;
+    }
+    if (hasFeature(tool, 'rules')) {
+        const rulesSrc = join(overlayTempDir, 'rules');
+        if (existsSync(rulesSrc)) {
+            count += readdirSync(rulesSrc).filter(f => f.endsWith('.md') && /^\d+-/.test(f)).length;
         }
     }
     if (hasFeature(tool, 'agents')) {
@@ -245,9 +346,9 @@ export function compareWithOverlay(rootDir, overlayTempDir, isGlobal = false) {
         : [];
     let overlayCount = 0;
     if (isGlobal) {
-        const aiddSrc = join(overlayTempDir, 'aidd');
-        if (existsSync(aiddSrc)) {
-            overlayCount += readdirSync(aiddSrc).filter(f => f.endsWith('.md') && /^\d+_/.test(f)).length;
+        const cmdsSrc = join(overlayTempDir, 'commands');
+        if (existsSync(cmdsSrc)) {
+            overlayCount += readdirSync(cmdsSrc).filter(f => f.endsWith('.md') && /^\d+_/.test(f)).length;
         }
         const agentsSrc = join(overlayTempDir, 'agents');
         if (existsSync(agentsSrc)) {

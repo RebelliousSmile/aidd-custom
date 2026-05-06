@@ -26,16 +26,18 @@ function touch(path: string, content = '# test') {
 /**
  * Creates a minimal fake overlay directory structure mirroring the AIDD framework:
  *   overlayDir/
- *     commands/01_onboard/cmd.md   → installed as commands/01/cmd.md
- *     rules/01-standards/rule.md   → installed as rules/01/rule.md
+ *     commands/01_cmd.md   → installed as commands/aidd/01/cmd.md
+ *     rules/01-rule.md     → installed as rules/01-rule/rule.md (or existing taxonomy dir)
  *     agents/agent.md
  *     skills/my-skill/skill.md
  *     templates/aidd/tmpl.md
  */
 function buildOverlay(overlayDir: string) {
-  mkdir(overlayDir, 'aidd');
-  touch(join(overlayDir, 'aidd', '01_cmd.md'), '---\nname: cmd\ndescription: test\n---\nContent');
-  touch(join(overlayDir, 'aidd', '01-rule.md'));
+  mkdir(overlayDir, 'commands');
+  touch(join(overlayDir, 'commands', '01_cmd.md'), '---\nname: cmd\ndescription: test\n---\nContent');
+
+  mkdir(overlayDir, 'rules');
+  touch(join(overlayDir, 'rules', '01-rule.md'));
 
   mkdir(overlayDir, 'agents');
   touch(join(overlayDir, 'agents', 'agent.md'), '---\ndescription: agent\n---\nContent');
@@ -76,7 +78,7 @@ describe('OverlayIndex CRUD', () => {
   });
 
   it('writes and reads back an index', () => {
-    const idx = { repo: 'owner/repo', branch: 'main', installedAt: '2024-01-01T00:00:00Z', files: ['a.md', 'b.md'] };
+    const idx = { repo: 'owner/repo', branch: 'main', installedAt: '2024-01-01T00:00:00Z', files: ['a.md', 'b.md'], tools: ['claude' as const] };
     writeOverlayIndex(projectDir, idx);
     const read = readOverlayIndex(projectDir);
     expect(read).toEqual(idx);
@@ -109,12 +111,21 @@ describe('installToolOverlay — claude', () => {
 
   it('copies commands to .claude/commands stripping dir suffix', () => {
     installToolOverlay('claude', projectDir, overlayDir);
-    expect(existsSync(join(projectDir, '.claude', 'commands', '01', '01_cmd.md'))).toBe(true);
+    expect(existsSync(join(projectDir, '.claude', 'commands', 'aidd', '01', 'cmd.md'))).toBe(true);
   });
 
-  it('copies rules to .claude/rules stripping dir suffix', () => {
+  it('copies rules to .claude/rules/<taxonomy>/ (fallback: NN-name)', () => {
     installToolOverlay('claude', projectDir, overlayDir);
-    expect(existsSync(join(projectDir, '.claude', 'rules', '01', '01-rule.md'))).toBe(true);
+    expect(existsSync(join(projectDir, '.claude', 'rules', '01-rule', 'rule.md'))).toBe(true);
+  });
+
+  it('merges rules into existing taxonomy dir when one NN- dir already exists', () => {
+    // Pre-create an existing taxonomy directory (simulates aidd base install)
+    mkdirSync(join(projectDir, '.claude', 'rules', '01-standards'), { recursive: true });
+    installToolOverlay('claude', projectDir, overlayDir);
+    // Rule file should land in the pre-existing 01-standards/ dir, not create 01-rule/
+    expect(existsSync(join(projectDir, '.claude', 'rules', '01-standards', 'rule.md'))).toBe(true);
+    expect(existsSync(join(projectDir, '.claude', 'rules', '01-rule'))).toBe(false);
   });
 
   it('copies agents to .claude/agents', () => {
@@ -129,8 +140,8 @@ describe('installToolOverlay — claude', () => {
 
   it('returns list of installed relative paths', () => {
     const files = installToolOverlay('claude', projectDir, overlayDir);
-    expect(files).toContain('.claude/commands/01/01_cmd.md');
-    expect(files).toContain('.claude/rules/01/01-rule.md');
+    expect(files).toContain('.claude/commands/aidd/01/cmd.md');
+    expect(files).toContain('.claude/rules/01-rule/rule.md');
     expect(files).toContain('.claude/agents/agent.md');
     expect(files).toContain('.claude/skills/my-skill/skill.md');
   });
@@ -152,12 +163,12 @@ describe('installToolOverlay — opencode', () => {
 
   it('copies commands to .opencode/commands stripping dir suffix', () => {
     installToolOverlay('opencode', projectDir, overlayDir);
-    expect(existsSync(join(projectDir, '.opencode', 'commands', '01', '01_cmd.md'))).toBe(true);
+    expect(existsSync(join(projectDir, '.opencode', 'commands', 'aidd', '01', 'cmd.md'))).toBe(true);
   });
 
-  it('copies rules to .opencode/rules stripping dir suffix', () => {
+  it('copies rules to .opencode/rules/<taxonomy>/', () => {
     installToolOverlay('opencode', projectDir, overlayDir);
-    expect(existsSync(join(projectDir, '.opencode', 'rules', '01', '01-rule.md'))).toBe(true);
+    expect(existsSync(join(projectDir, '.opencode', 'rules', '01-rule', 'rule.md'))).toBe(true);
   });
 
   it('copies agents to .opencode/agents', () => {
@@ -167,7 +178,7 @@ describe('installToolOverlay — opencode', () => {
 
   it('transforms command frontmatter to OpenCode format (name + description fields)', () => {
     installToolOverlay('opencode', projectDir, overlayDir);
-    const content = readFileSync(join(projectDir, '.opencode', 'commands', '01', '01_cmd.md'), 'utf-8');
+    const content = readFileSync(join(projectDir, '.opencode', 'commands', 'aidd', '01', 'cmd.md'), 'utf-8');
     expect(content).toContain('name: 01_cmd');
     expect(content).toContain('description: test');
   });
@@ -181,7 +192,7 @@ describe('installToolOverlay — opencode', () => {
 
   it('preserves command body content after frontmatter transform', () => {
     installToolOverlay('opencode', projectDir, overlayDir);
-    const content = readFileSync(join(projectDir, '.opencode', 'commands', '01', '01_cmd.md'), 'utf-8');
+    const content = readFileSync(join(projectDir, '.opencode', 'commands', 'aidd', '01', 'cmd.md'), 'utf-8');
     expect(content).toContain('Content');
   });
 
@@ -203,12 +214,12 @@ describe('installToolOverlay — cursor', () => {
 
   it('copies commands to .cursor/commands stripping dir suffix', () => {
     installToolOverlay('cursor', projectDir, overlayDir);
-    expect(existsSync(join(projectDir, '.cursor', 'commands', '01', '01_cmd.md'))).toBe(true);
+    expect(existsSync(join(projectDir, '.cursor', 'commands', 'aidd', '01', 'cmd.md'))).toBe(true);
   });
 
-  it('copies rules to .cursor/rules stripping dir suffix', () => {
+  it('copies rules to .cursor/rules/<taxonomy>/', () => {
     installToolOverlay('cursor', projectDir, overlayDir);
-    expect(existsSync(join(projectDir, '.cursor', 'rules', '01', '01-rule.md'))).toBe(true);
+    expect(existsSync(join(projectDir, '.cursor', 'rules', '01-rule', 'rule.md'))).toBe(true);
   });
 
   it('does not create agents (not supported)', () => {
@@ -253,7 +264,7 @@ describe('installGlobalOverlay', () => {
 
   it('copies commands to <global>/commands stripping dir suffix', () => {
     installGlobalOverlay(globalDir, overlayDir);
-    expect(existsSync(join(globalDir, 'commands', '01', '01_cmd.md'))).toBe(true);
+    expect(existsSync(join(globalDir, 'commands', 'aidd', '01', 'cmd.md'))).toBe(true);
   });
 
   it('copies all agents to <global>/agents', () => {
@@ -297,14 +308,22 @@ describe('cleanByIndex — project (claude)', () => {
       branch: 'main',
       installedAt: new Date().toISOString(),
       files,
+      tools: ['claude'],
     });
   });
 
   it('removes indexed files from disk', () => {
     cleanByIndex(projectDir);
-    expect(existsSync(join(projectDir, '.claude', 'commands', '01', '01_cmd.md'))).toBe(false);
-    expect(existsSync(join(projectDir, '.claude', 'rules', '01', '01-rule.md'))).toBe(false);
+    expect(existsSync(join(projectDir, '.claude', 'commands', 'aidd', '01', 'cmd.md'))).toBe(false);
+    expect(existsSync(join(projectDir, '.claude', 'rules', '01-rule', 'rule.md'))).toBe(false);
     expect(existsSync(join(projectDir, '.claude', 'agents', 'agent.md'))).toBe(false);
+  });
+
+  it('removes empty directories left behind after clean', () => {
+    cleanByIndex(projectDir);
+    expect(existsSync(join(projectDir, '.claude', 'skills', 'my-skill'))).toBe(false);
+    expect(existsSync(join(projectDir, '.claude', 'commands', 'aidd', '01'))).toBe(false);
+    expect(existsSync(join(projectDir, '.claude', 'rules', '01-rule'))).toBe(false);
   });
 
   it('returns the count of removed files', () => {
@@ -344,7 +363,7 @@ describe('cleanByIndex — global', () => {
 
   it('removes indexed global files from disk', () => {
     cleanByIndex(globalDir, true);
-    expect(existsSync(join(globalDir, 'commands', '01', '01_cmd.md'))).toBe(false);
+    expect(existsSync(join(globalDir, 'commands', 'aidd', '01', 'cmd.md'))).toBe(false);
   });
 
   it('removes global index file after clean', () => {
@@ -384,6 +403,7 @@ describe('checkInstallStatus', () => {
       branch: 'main',
       installedAt: new Date().toISOString(),
       files,
+      tools: ['claude'],
     });
     const status = checkInstallStatus(projectDir);
     expect(status.notIndexed).toBe(false);
@@ -399,6 +419,7 @@ describe('checkInstallStatus', () => {
       branch: 'main',
       installedAt: new Date().toISOString(),
       files,
+      tools: ['claude'],
     });
     rmSync(join(projectDir, files[0]));
     const status = checkInstallStatus(projectDir);
@@ -412,6 +433,7 @@ describe('checkInstallStatus', () => {
       branch: 'develop',
       installedAt: '2024-01-01T00:00:00Z',
       files: [],
+      tools: ['claude'],
     });
     const status = checkInstallStatus(projectDir);
     expect(status.repo).toBe('owner/repo');

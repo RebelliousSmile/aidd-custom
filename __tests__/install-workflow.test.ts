@@ -33,9 +33,11 @@ function touch(path: string, content = '# content') {
 }
 
 function buildOverlay(dir: string) {
-  mkdir(dir, 'aidd');
-  touch(join(dir, 'aidd', '01_cmd.md'), '---\nname: cmd\ndescription: test cmd\n---\nDo something.');
-  touch(join(dir, 'aidd', '01-rule.md'), '# Rule\nBe consistent.');
+  mkdir(dir, 'commands');
+  touch(join(dir, 'commands', '01_cmd.md'), '---\nname: cmd\ndescription: test cmd\n---\nDo something.');
+
+  mkdir(dir, 'rules');
+  touch(join(dir, 'rules', '01-rule.md'), '# Rule\nBe consistent.');
 
   mkdir(dir, 'agents');
   touch(join(dir, 'agents', 'reviewer.md'), '---\ndescription: code reviewer\n---\nReview the code.');
@@ -96,11 +98,11 @@ describe('Install — files land in the correct Claude directories', () => {
   });
 
   it('places commands under .claude/commands/<prefix>/', () => {
-    expect(existsSync(join(projectDir, cfg.commandsDir, '01', '01_cmd.md'))).toBe(true);
+    expect(existsSync(join(projectDir, cfg.commandsDir, 'aidd', '01', 'cmd.md'))).toBe(true);
   });
 
-  it('places rules under .claude/rules/<prefix>/', () => {
-    expect(existsSync(join(projectDir, cfg.rulesDir, '01', '01-rule.md'))).toBe(true);
+  it('places rules under .claude/rules/<taxonomy>/', () => {
+    expect(existsSync(join(projectDir, cfg.rulesDir, '01-rule', 'rule.md'))).toBe(true);
   });
 
   it('places agents under .claude/agents/', () => {
@@ -118,8 +120,8 @@ describe('Install — files land in the correct Claude directories', () => {
 
   it('returns relative paths matching the actual destinations', () => {
     const files = installToolOverlay('claude', projectDir, overlayDir);
-    expect(files).toContain('.claude/commands/01/01_cmd.md');
-    expect(files).toContain('.claude/rules/01/01-rule.md');
+    expect(files).toContain('.claude/commands/aidd/01/cmd.md');
+    expect(files).toContain('.claude/rules/01-rule/rule.md');
     expect(files).toContain('.claude/agents/reviewer.md');
     expect(files).toContain('.claude/skills/my-skill/skill.md');
   });
