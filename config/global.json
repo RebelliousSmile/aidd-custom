@@ -1,6 +1,6 @@
 {
   "overlay": {
-    "repo": "RebelliousSmile/aidd-claude-custom",
+    "repo": "RebelliousSmile/aidd-overlay",
     "branch": "main"
   },
   "plugins": {}

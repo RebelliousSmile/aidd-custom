@@ -1,56 +1,28 @@
-import { existsSync, readFileSync, writeFileSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const PACKAGE_ROOT = join(__dirname, '..');
-export const GLOBAL_CONFIG_FILE = join(PACKAGE_ROOT, 'config.json');
-export const DEFAULT_OVERLAY_REPO = 'RebelliousSmile/aidd-opencode-custom';
-export function getGlobalConfig() {
-    if (existsSync(GLOBAL_CONFIG_FILE)) {
-        try {
-            const content = readFileSync(GLOBAL_CONFIG_FILE, 'utf-8');
-            const config = JSON.parse(content);
-            if (config.overlay?.repo) {
-                return {
-                    repo: config.overlay.repo,
-                    branch: config.overlay.branch || 'main',
-                };
-            }
-        }
-        catch (e) {
+import { existsSync, readFileSync } from 'fs';
+import { join } from 'path';
+import { homedir } from 'os';
+const CONFIG_DIR = join(homedir(), '.config', 'aidd-custom');
+export const GLOBAL_CONFIG_FILE = join(CONFIG_DIR, 'config.json');
+export const DEFAULT_OVERLAY_REPO = 'RebelliousSmile/aidd-overlay';
+function readConfig(path) {
+    if (!existsSync(path))
+        return null;
+    try {
+        const config = JSON.parse(readFileSync(path, 'utf-8'));
+        if (config.overlay?.repo) {
+            return { repo: config.overlay.repo, branch: config.overlay.branch || 'main' };
         }
     }
+    catch { }
     return null;
 }
-export function getOverlayConfig(_projectRoot) {
-    const globalConfig = getGlobalConfig();
-    if (globalConfig)
-        return globalConfig;
-    return { repo: DEFAULT_OVERLAY_REPO, branch: 'main' };
+export function getGlobalConfig() {
+    return readConfig(GLOBAL_CONFIG_FILE);
 }
-export function getGlobalPlugins() {
-    if (existsSync(GLOBAL_CONFIG_FILE)) {
-        try {
-            const content = readFileSync(GLOBAL_CONFIG_FILE, 'utf-8');
-            const config = JSON.parse(content);
-            return config.plugins || {};
-        }
-        catch (e) {
-        }
-    }
-    return {};
-}
-export function saveGlobalPlugins(plugins) {
-    let config = {};
-    if (existsSync(GLOBAL_CONFIG_FILE)) {
-        try {
-            config = JSON.parse(readFileSync(GLOBAL_CONFIG_FILE, 'utf-8'));
-        }
-        catch (e) {
-        }
-    }
-    config.plugins = plugins;
-    writeFileSync(GLOBAL_CONFIG_FILE, JSON.stringify(config, null, 2));
+// Priority: project (.aidd/config.json) > global (~/.config/aidd-custom/config.json) > hardcoded default
+export function getOverlayConfig(projectRoot) {
+    return (readConfig(join(projectRoot, '.aidd', 'config.json')) ??
+        getGlobalConfig() ??
+        { repo: DEFAULT_OVERLAY_REPO, branch: 'main' });
 }
 //# sourceMappingURL=config.js.map
