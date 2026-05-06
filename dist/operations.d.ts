@@ -36,6 +36,7 @@ export interface OverlayComparison {
     missingFromDisk: string[];
     locallyModified: string[];
     overlayUpdated: string[];
+    newInOverlay: string[];
     noHashBaseline: boolean;
 }
 export declare function compareWithOverlay(rootDir: string, overlayTempDir: string, isGlobal?: boolean): OverlayComparison;

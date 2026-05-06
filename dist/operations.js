@@ -423,13 +423,17 @@ export function compareWithOverlay(rootDir, overlayTempDir, isGlobal = false) {
             }
         }
     }
+    // Files present in the overlay but not in the index (never installed)
+    const indexedSet = new Set(index?.files ?? []);
+    const newInOverlay = Object.keys(overlayHashes).filter(f => !indexedSet.has(f));
     return {
         indexedCount,
         overlayCount,
-        inSync: indexedCount === overlayCount && missingFromDisk.length === 0 && locallyModified.length === 0 && overlayUpdated.length === 0,
+        inSync: indexedCount === overlayCount && missingFromDisk.length === 0 && locallyModified.length === 0 && overlayUpdated.length === 0 && newInOverlay.length === 0,
         missingFromDisk,
         locallyModified,
         overlayUpdated,
+        newInOverlay,
         noHashBaseline,
     };
 }

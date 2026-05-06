@@ -302,7 +302,7 @@ program
         console.log('\n⚠ No hash baseline — run "install" to enable per-file tracking');
       } else {
         const changed = new Set([...cmp.overlayUpdated, ...cmp.locallyModified]);
-        if (changed.size === 0) {
+        if (changed.size === 0 && cmp.newInOverlay.length === 0) {
           console.log(`\n✓ All ${cmp.indexedCount} files up to date`);
         } else {
           console.log(`\n=== Content Check ===`);
@@ -317,8 +317,12 @@ program
               console.log(`  ~  ${f}  (locally modified)`);
             }
           }
-          if (cmp.overlayUpdated.length > 0) {
-            console.log(`\n  Run "install" to apply ${cmp.overlayUpdated.length} overlay update(s)`);
+          for (const f of cmp.newInOverlay.sort()) {
+            console.log(`  +  ${f}  (new in overlay)`);
+          }
+          const actionCount = cmp.overlayUpdated.length + cmp.newInOverlay.length;
+          if (actionCount > 0) {
+            console.log(`\n  Run "install" to apply ${actionCount} overlay update(s)`);
           }
         }
       }
