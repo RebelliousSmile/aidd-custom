@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { existsSync, mkdirSync, writeFileSync, rmSync, readdirSync } from 'fs';
+import { existsSync, mkdirSync, writeFileSync, rmSync, readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import {
   installToolOverlay,
@@ -165,6 +165,31 @@ describe('installToolOverlay — opencode', () => {
     expect(existsSync(join(projectDir, '.opencode', 'agents', 'agent.md'))).toBe(true);
   });
 
+  it('transforms command frontmatter to OpenCode format (name + description fields)', () => {
+    installToolOverlay('opencode', projectDir, overlayDir);
+    const content = readFileSync(join(projectDir, '.opencode', 'commands', '01', '01_cmd.md'), 'utf-8');
+    expect(content).toContain('name: 01_cmd');
+    expect(content).toContain('description: test');
+  });
+
+  it('transforms agent frontmatter to OpenCode format (description + mode fields)', () => {
+    installToolOverlay('opencode', projectDir, overlayDir);
+    const content = readFileSync(join(projectDir, '.opencode', 'agents', 'agent.md'), 'utf-8');
+    expect(content).toContain('description: agent');
+    expect(content).toContain('mode: subagent');
+  });
+
+  it('preserves command body content after frontmatter transform', () => {
+    installToolOverlay('opencode', projectDir, overlayDir);
+    const content = readFileSync(join(projectDir, '.opencode', 'commands', '01', '01_cmd.md'), 'utf-8');
+    expect(content).toContain('Content');
+  });
+
+  it('preserves agent body content after frontmatter transform', () => {
+    installToolOverlay('opencode', projectDir, overlayDir);
+    const content = readFileSync(join(projectDir, '.opencode', 'agents', 'agent.md'), 'utf-8');
+    expect(content).toContain('Content');
+  });
 });
 
 // ============================================================

@@ -191,6 +191,8 @@ program
         return;
     }
     console.log(`✓ Installed from ${status.repo} @ ${status.branch}`);
+    if (status.installedAt)
+        console.log(`  Installed: ${new Date(status.installedAt).toLocaleString()}`);
     console.log(`  ${status.present}/${status.indexed} files present`);
     if (status.missing.length > 0) {
         console.log('  Missing:');

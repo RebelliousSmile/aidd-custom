@@ -14,7 +14,7 @@ export interface OverlayIndex {
   branch: string;
   installedAt: string;
   files: string[];
-  tools?: ToolType[];  // tools installed (absent for global installs)
+  tools?: ToolType[];  // absent for global installs; repairFromOverlay falls back to []
 }
 
 const PROJECT_INDEX = join('.aidd', 'overlay.json');
@@ -48,6 +48,14 @@ export function deleteOverlayIndex(rootDir: string, isGlobal = false): void {
 // normalize path separators to forward slashes for cross-platform index entries
 function norm(p: string): string {
   return p.split('\\').join('/');
+}
+
+function applyTransform(
+  fn: ((content: string, filename: string) => string) | null,
+  content: string,
+  filename: string,
+): string {
+  return fn ? fn(content, filename) : content;
 }
 
 // ─── fs helpers ───────────────────────────────────────────────────────────────
@@ -88,22 +96,23 @@ function installAiddContent(
       const destDir = join(projectRoot, cfg.commandsDir, num);
       mkdirSync(destDir, { recursive: true });
       const content = readFileSync(join(srcDir, file), 'utf-8');
-      writeFileSync(join(destDir, file), cfg.transform.commands ? cfg.transform.commands(content, file) : content);
+      writeFileSync(join(destDir, file), applyTransform(cfg.transform.commands, content, file));
       installed.push(norm(join(cfg.commandsDir, num, file)));
     } else if (cmdMatch && tool === 'copilot') {
       const num = cmdMatch[1];
       const destDir = join(projectRoot, cfg.commandsDir, num);
       mkdirSync(destDir, { recursive: true });
+      // Copilot expects prompt files as .prompt.md
       const destFile = file.replace('.md', '.prompt.md');
       const content = readFileSync(join(srcDir, file), 'utf-8');
-      writeFileSync(join(destDir, destFile), cfg.transform.commands ? cfg.transform.commands(content, file) : content);
+      writeFileSync(join(destDir, destFile), applyTransform(cfg.transform.commands, content, file));
       installed.push(norm(join(cfg.commandsDir, num, destFile)));
     } else if (ruleMatch && hasFeature(tool, 'rules')) {
       const num = ruleMatch[1];
       const destDir = join(projectRoot, cfg.rulesDir, num);
       mkdirSync(destDir, { recursive: true });
       const content = readFileSync(join(srcDir, file), 'utf-8');
-      writeFileSync(join(destDir, file), cfg.transform.rules ? cfg.transform.rules(content, file) : content);
+      writeFileSync(join(destDir, file), applyTransform(cfg.transform.rules, content, file));
       installed.push(norm(join(cfg.rulesDir, num, file)));
     }
   }
@@ -125,7 +134,7 @@ export function installToolOverlay(tool: ToolType, projectRoot: string, overlayT
       const files = readdirSync(srcDir).filter(f => f.endsWith('.md'));
       for (const file of files) {
         const content = readFileSync(join(srcDir, file), 'utf-8');
-        writeFileSync(join(destDir, file), cfg.transform.agents ? cfg.transform.agents(content, file) : content);
+        writeFileSync(join(destDir, file), applyTransform(cfg.transform.agents, content, file));
         installed.push(norm(join(getToolConfig(tool).agentsDir, file)));
       }
     }
