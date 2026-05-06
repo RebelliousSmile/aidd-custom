@@ -109,12 +109,14 @@ program
       let tempDir: string | undefined;
       try {
         tempDir = cloneToTemp(overlayConfig.repo, overlayConfig.branch);
-        const files = installGlobalOverlay(globalRoot, tempDir);
+        const hashes: Record<string, string> = {};
+        const files = installGlobalOverlay(globalRoot, tempDir, hashes);
         writeOverlayIndex(globalRoot, {
           repo: overlayConfig.repo,
           branch: overlayConfig.branch,
           installedAt: new Date().toISOString(),
           files,
+          hashes,
         }, true);
         console.log(`Installed ${files.length} file(s) to ${globalRoot}`);
       } catch (e) {
@@ -150,16 +152,18 @@ program
     try {
       tempDir = cloneToTemp(overlayConfig.repo, overlayConfig.branch, projectRoot);
       const allFiles: string[] = [];
+      const hashes: Record<string, string> = {};
       for (const tool of tools) {
         console.log(`\n=== Installing for ${tool} ===`);
-        allFiles.push(...installToolOverlay(tool, projectRoot, tempDir));
+        allFiles.push(...installToolOverlay(tool, projectRoot, tempDir, hashes));
       }
-      allFiles.push(...installTemplates(projectRoot, tempDir));
+      allFiles.push(...installTemplates(projectRoot, tempDir, hashes));
       writeOverlayIndex(projectRoot, {
         repo: overlayConfig.repo,
         branch: overlayConfig.branch,
         installedAt: new Date().toISOString(),
         files: allFiles,
+        hashes,
         tools,
       });
       console.log(`\nInstalled ${allFiles.length} file(s)`);
@@ -264,15 +268,43 @@ program
       if (cmp.inSync) {
         console.log(`✓ In sync (${cmp.indexedCount} indexed, ${cmp.overlayCount} in overlay)`);
       } else {
-        console.log(`⚠ Out of sync: indexed=${cmp.indexedCount}, overlay=${cmp.overlayCount}`);
+        if (cmp.indexedCount !== cmp.overlayCount) {
+          console.log(`⚠ Count mismatch: indexed=${cmp.indexedCount}, overlay=${cmp.overlayCount}`);
+        }
         if (cmp.missingFromDisk.length > 0) {
           console.log('  Missing from disk:');
           for (const f of cmp.missingFromDisk) console.log(`    - ${f}`);
           console.log('\nRepairing missing files...');
           repairFromOverlay(projectRoot, tempDir);
           console.log('✓ Repaired');
-        } else {
+        }
+        if (cmp.indexedCount !== cmp.overlayCount && cmp.missingFromDisk.length === 0) {
           console.log('\nRun "clean" then "install" to sync');
+        }
+      }
+
+      if (cmp.noHashBaseline) {
+        console.log('\n⚠ No hash baseline — run "install" to enable per-file tracking');
+      } else {
+        const changed = new Set([...cmp.overlayUpdated, ...cmp.locallyModified]);
+        if (changed.size === 0) {
+          console.log(`\n✓ All ${cmp.indexedCount} files up to date`);
+        } else {
+          console.log(`\n=== Content Check ===`);
+          for (const f of [...changed].sort()) {
+            const isUpdated = cmp.overlayUpdated.includes(f);
+            const isModified = cmp.locallyModified.includes(f);
+            if (isUpdated && isModified) {
+              console.log(`  ⚡ ${f}  (overlay updated + locally modified)`);
+            } else if (isUpdated) {
+              console.log(`  ↑  ${f}  (overlay updated)`);
+            } else {
+              console.log(`  ~  ${f}  (locally modified)`);
+            }
+          }
+          if (cmp.overlayUpdated.length > 0) {
+            console.log(`\n  Run "install" to apply ${cmp.overlayUpdated.length} overlay update(s)`);
+          }
         }
       }
     } catch (e) {

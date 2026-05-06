@@ -1,5 +1,6 @@
-import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, cpSync, rmSync, statSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, rmSync, statSync } from 'fs';
 import { join, dirname, relative } from 'path';
+import { createHash } from 'crypto';
 import { getToolConfig, getFileCount, hasFeature, } from './index.js';
 const PROJECT_INDEX = join('.aidd', 'aidd-custom.json');
 const GLOBAL_INDEX = 'aidd-overlay.json';
@@ -34,6 +35,9 @@ function norm(p) {
 function applyTransform(fn, content, filename) {
     return fn ? fn(content, filename) : content;
 }
+function hashContent(content) {
+    return createHash('sha1').update(content).digest('hex');
+}
 // ─── fs helpers ───────────────────────────────────────────────────────────────
 function listAllFiles(dir) {
     if (!existsSync(dir))
@@ -51,9 +55,8 @@ function listAllFiles(dir) {
     walk(dir);
     return results;
 }
-// Install commands from commands/ directory (flat NN_name.md files)
-// and rules from rules/ directory (flat NN-name.md files)
-function installAiddContent(tool, projectRoot, overlayTempDir, installed) {
+// Install commands and rules from overlay; write=false for dry-run hash capture
+function installAiddContent(tool, projectRoot, overlayTempDir, installed, hashes, write = true) {
     const cfg = getToolConfig(tool);
     if (hasFeature(tool, 'commands') || tool === 'copilot') {
         const cmdSrc = join(overlayTempDir, 'commands');
@@ -63,16 +66,28 @@ function installAiddContent(tool, projectRoot, overlayTempDir, installed) {
                 const num = match[1];
                 const baseName = match[2]; // strip NN_ prefix
                 const destDir = join(projectRoot, cfg.commandsDir, 'aidd', num);
-                mkdirSync(destDir, { recursive: true });
                 const content = readFileSync(join(cmdSrc, file), 'utf-8');
+                const transformed = applyTransform(cfg.transform.commands, content, file);
                 if (tool === 'copilot') {
                     const destFile = baseName.replace(/\.md$/, '.prompt.md');
-                    writeFileSync(join(destDir, destFile), applyTransform(cfg.transform.commands, content, file));
-                    installed.push(norm(join(cfg.commandsDir, 'aidd', num, destFile)));
+                    if (write) {
+                        mkdirSync(destDir, { recursive: true });
+                        writeFileSync(join(destDir, destFile), transformed);
+                    }
+                    const key = norm(join(cfg.commandsDir, 'aidd', num, destFile));
+                    installed.push(key);
+                    if (hashes)
+                        hashes[key] = hashContent(transformed);
                 }
                 else {
-                    writeFileSync(join(destDir, baseName), applyTransform(cfg.transform.commands, content, file));
-                    installed.push(norm(join(cfg.commandsDir, 'aidd', num, baseName)));
+                    if (write) {
+                        mkdirSync(destDir, { recursive: true });
+                        writeFileSync(join(destDir, baseName), transformed);
+                    }
+                    const key = norm(join(cfg.commandsDir, 'aidd', num, baseName));
+                    installed.push(key);
+                    if (hashes)
+                        hashes[key] = hashContent(transformed);
                 }
             }
         }
@@ -101,29 +116,41 @@ function installAiddContent(tool, projectRoot, overlayTempDir, installed) {
                 const existing = taxonomyByNum.get(num);
                 const taxonomy = existing || file.replace(/\.md$/, ''); // fallback: NN-name
                 const destDir = join(projectRoot, cfg.rulesDir, taxonomy);
-                mkdirSync(destDir, { recursive: true });
                 const content = readFileSync(join(rulesSrc, file), 'utf-8');
-                writeFileSync(join(destDir, baseName), applyTransform(cfg.transform.rules, content, file));
-                installed.push(norm(join(cfg.rulesDir, taxonomy, baseName)));
+                const transformed = applyTransform(cfg.transform.rules, content, file);
+                if (write) {
+                    mkdirSync(destDir, { recursive: true });
+                    writeFileSync(join(destDir, baseName), transformed);
+                }
+                const key = norm(join(cfg.rulesDir, taxonomy, baseName));
+                installed.push(key);
+                if (hashes)
+                    hashes[key] = hashContent(transformed);
             }
         }
     }
 }
 // ─── install ─────────────────────────────────────────────────────────────────
-export function installToolOverlay(tool, projectRoot, overlayTempDir) {
+export function installToolOverlay(tool, projectRoot, overlayTempDir, hashes, write = true) {
     const cfg = getToolConfig(tool);
     const installed = [];
-    installAiddContent(tool, projectRoot, overlayTempDir, installed);
+    installAiddContent(tool, projectRoot, overlayTempDir, installed, hashes, write);
     if (hasFeature(tool, 'agents')) {
         const srcDir = join(overlayTempDir, 'agents');
         const destDir = join(projectRoot, getToolConfig(tool).agentsDir);
         if (existsSync(srcDir)) {
-            mkdirSync(destDir, { recursive: true });
+            if (write)
+                mkdirSync(destDir, { recursive: true });
             const files = readdirSync(srcDir).filter(f => f.endsWith('.md'));
             for (const file of files) {
                 const content = readFileSync(join(srcDir, file), 'utf-8');
-                writeFileSync(join(destDir, file), applyTransform(cfg.transform.agents, content, file));
-                installed.push(norm(join(getToolConfig(tool).agentsDir, file)));
+                const transformed = applyTransform(cfg.transform.agents, content, file);
+                if (write)
+                    writeFileSync(join(destDir, file), transformed);
+                const key = norm(join(getToolConfig(tool).agentsDir, file));
+                installed.push(key);
+                if (hashes)
+                    hashes[key] = hashContent(transformed);
             }
         }
     }
@@ -132,23 +159,46 @@ export function installToolOverlay(tool, projectRoot, overlayTempDir) {
         const skillsDir = cfg.skillsDir;
         const destDir = join(projectRoot, skillsDir);
         if (existsSync(srcDir)) {
-            mkdirSync(destDir, { recursive: true });
-            cpSync(srcDir, destDir, { recursive: true });
-            installed.push(...listAllFiles(srcDir).map(f => norm(join(skillsDir, f))));
+            const skillFiles = listAllFiles(srcDir);
+            for (const f of skillFiles) {
+                const srcPath = join(srcDir, f);
+                const key = norm(join(skillsDir, f));
+                const raw = readFileSync(srcPath);
+                if (write) {
+                    const dest = join(destDir, f);
+                    mkdirSync(dirname(dest), { recursive: true });
+                    writeFileSync(dest, raw);
+                }
+                installed.push(key);
+                if (hashes)
+                    hashes[key] = hashContent(raw);
+            }
         }
     }
     return installed;
 }
-export function installTemplates(projectRoot, overlayTempDir) {
+export function installTemplates(projectRoot, overlayTempDir, hashes, write = true) {
     const srcDir = join(overlayTempDir, 'templates');
     const destDir = join(projectRoot, 'aidd_docs', 'templates');
     if (!existsSync(srcDir))
         return [];
-    mkdirSync(destDir, { recursive: true });
-    cpSync(srcDir, destDir, { recursive: true });
-    return listAllFiles(srcDir).map(f => norm(join('aidd_docs', 'templates', f)));
+    const files = listAllFiles(srcDir);
+    const installed = [];
+    for (const f of files) {
+        const raw = readFileSync(join(srcDir, f));
+        const key = norm(join('aidd_docs', 'templates', f));
+        if (write) {
+            const dest = join(destDir, f);
+            mkdirSync(dirname(dest), { recursive: true });
+            writeFileSync(dest, raw);
+        }
+        installed.push(key);
+        if (hashes)
+            hashes[key] = hashContent(raw);
+    }
+    return installed;
 }
-export function installGlobalOverlay(globalRoot, overlayTempDir) {
+export function installGlobalOverlay(globalRoot, overlayTempDir, hashes, write = true) {
     const installed = [];
     const cmdsSrc = join(overlayTempDir, 'commands');
     if (existsSync(cmdsSrc)) {
@@ -157,26 +207,48 @@ export function installGlobalOverlay(globalRoot, overlayTempDir) {
             const num = match[1];
             const baseName = match[2];
             const destDir = join(globalRoot, 'commands', 'aidd', num);
-            mkdirSync(destDir, { recursive: true });
-            cpSync(join(cmdsSrc, file), join(destDir, baseName));
-            installed.push(norm(join('commands', 'aidd', num, baseName)));
+            const content = readFileSync(join(cmdsSrc, file), 'utf-8');
+            if (write) {
+                mkdirSync(destDir, { recursive: true });
+                writeFileSync(join(destDir, baseName), content);
+            }
+            const key = norm(join('commands', 'aidd', num, baseName));
+            installed.push(key);
+            if (hashes)
+                hashes[key] = hashContent(content);
         }
     }
     const agentsSrc = join(overlayTempDir, 'agents');
     const agentsDest = join(globalRoot, 'agents');
     if (existsSync(agentsSrc)) {
-        mkdirSync(agentsDest, { recursive: true });
+        if (write)
+            mkdirSync(agentsDest, { recursive: true });
         for (const f of readdirSync(agentsSrc).filter(f => f.endsWith('.md'))) {
-            cpSync(join(agentsSrc, f), join(agentsDest, f));
-            installed.push(norm(join('agents', f)));
+            const content = readFileSync(join(agentsSrc, f), 'utf-8');
+            if (write)
+                writeFileSync(join(agentsDest, f), content);
+            const key = norm(join('agents', f));
+            installed.push(key);
+            if (hashes)
+                hashes[key] = hashContent(content);
         }
     }
     const skillsSrc = join(overlayTempDir, 'skills');
     const skillsDest = join(globalRoot, 'skills');
     if (existsSync(skillsSrc)) {
-        mkdirSync(skillsDest, { recursive: true });
-        cpSync(skillsSrc, skillsDest, { recursive: true });
-        installed.push(...listAllFiles(skillsSrc).map(f => norm(join('skills', f))));
+        const skillFiles = listAllFiles(skillsSrc);
+        for (const f of skillFiles) {
+            const raw = readFileSync(join(skillsSrc, f));
+            if (write) {
+                const dest = join(skillsDest, f);
+                mkdirSync(dirname(dest), { recursive: true });
+                writeFileSync(dest, raw);
+            }
+            const key = norm(join('skills', f));
+            installed.push(key);
+            if (hashes)
+                hashes[key] = hashContent(raw);
+        }
     }
     return installed;
 }
@@ -276,9 +348,23 @@ function countToolOverlay(tool, overlayTempDir) {
 }
 export function compareWithOverlay(rootDir, overlayTempDir, isGlobal = false) {
     const index = readOverlayIndex(rootDir, isGlobal);
+    const storedHashes = index?.hashes ?? {};
+    const noHashBaseline = index != null && (index.hashes == null || Object.keys(index.hashes).length === 0);
     const missingFromDisk = index
         ? index.files.filter(f => !existsSync(join(rootDir, f)))
         : [];
+    // Compute what hashes the overlay would produce now (dry-run, no writes)
+    const overlayHashes = {};
+    if (isGlobal) {
+        installGlobalOverlay(rootDir, overlayTempDir, overlayHashes, false);
+    }
+    else {
+        for (const tool of (index?.tools ?? [])) {
+            installToolOverlay(tool, rootDir, overlayTempDir, overlayHashes, false);
+        }
+        installTemplates(rootDir, overlayTempDir, overlayHashes, false);
+    }
+    // Count overlay files (for the count check)
     let overlayCount = 0;
     if (isGlobal) {
         const cmdsSrc = join(overlayTempDir, 'commands');
@@ -300,11 +386,33 @@ export function compareWithOverlay(rootDir, overlayTempDir, isGlobal = false) {
         overlayCount += getFileCount(join(overlayTempDir, 'templates'));
     }
     const indexedCount = index?.files.length ?? 0;
+    // Per-file content diff (only when we have a hash baseline)
+    const locallyModified = [];
+    const overlayUpdated = [];
+    if (!noHashBaseline) {
+        for (const file of index?.files ?? []) {
+            if (!existsSync(join(rootDir, file)))
+                continue; // already in missingFromDisk
+            const storedHash = storedHashes[file];
+            if (!storedHash)
+                continue;
+            const currentHash = hashContent(readFileSync(join(rootDir, file)));
+            if (currentHash !== storedHash) {
+                locallyModified.push(file);
+            }
+            if (overlayHashes[file] && overlayHashes[file] !== storedHash) {
+                overlayUpdated.push(file);
+            }
+        }
+    }
     return {
         indexedCount,
         overlayCount,
-        inSync: indexedCount === overlayCount && missingFromDisk.length === 0,
+        inSync: indexedCount === overlayCount && missingFromDisk.length === 0 && locallyModified.length === 0 && overlayUpdated.length === 0,
         missingFromDisk,
+        locallyModified,
+        overlayUpdated,
+        noHashBaseline,
     };
 }
 //# sourceMappingURL=operations.js.map
