@@ -8,11 +8,6 @@ import { join } from 'path';
 export type ToolType = 'claude' | 'copilot' | 'cursor' | 'opencode';
 
 /**
- * Content type to transform
- */
-export type ContentType = 'commands' | 'rules' | 'agents' | 'templates';
-
-/**
  * Transformation function type
  */
 export type TransformFn = (content: string, filename: string) => string;
@@ -24,7 +19,7 @@ export interface ToolConfig {
   commandsDir: string;
   rulesDir: string;
   agentsDir: string;
-  templatesDir: string;
+  skillsDir: string | null;
   instructions: string | null;
   instructionsPath: string | null;
   configFile?: string;
@@ -50,10 +45,10 @@ export const TOOL_DIRECTORIES: Record<ToolType, string[]> = {
  */
 export const TOOL_CONFIGS: Record<ToolType, ToolConfig> = {
   claude: {
-    commandsDir: '.claude/commands/custom',
-    rulesDir: '.claude/rules/custom',
-    agentsDir: '.claude/agents/custom',
-    templatesDir: 'aidd_docs/templates/custom',
+    commandsDir: '.claude/commands',
+    rulesDir: '.claude/rules',
+    agentsDir: '.claude/agents',
+    skillsDir: '.claude/skills',
     instructions: 'CLAUDE.md',
     instructionsPath: null,
     transform: {
@@ -63,16 +58,16 @@ export const TOOL_CONFIGS: Record<ToolType, ToolConfig> = {
     },
   },
   opencode: {
-    commandsDir: '.opencode/commands/aidd/custom',
-    rulesDir: '.opencode/rules/custom',
-    agentsDir: '.opencode/agents/custom',
-    templatesDir: 'aidd_docs/templates/custom',
+    commandsDir: '.opencode/commands',
+    rulesDir: '.opencode/rules',
+    agentsDir: '.opencode/agents',
+    skillsDir: '.opencode/skills',
     instructions: 'AGENTS.md',
     instructionsPath: null,
     configFile: 'opencode.json',
     transform: {
       commands: transformCommandsToOpenCode,
-      rules: transformRulesToOpenCode,
+      rules: null,
       agents: transformAgentsToOpenCode,
     },
   },
@@ -80,20 +75,20 @@ export const TOOL_CONFIGS: Record<ToolType, ToolConfig> = {
     commandsDir: '.cursor/commands',
     rulesDir: '.cursor/rules',
     agentsDir: '.cursor/agents',
-    templatesDir: 'aidd_docs/templates/custom',
+    skillsDir: null,
     instructions: '.mdc',
     instructionsPath: '.cursor/rules',
     transform: {
-      commands: transformCommandsToCursor,
+      commands: null,
       rules: convertRuleToMdc,
       agents: null,
     },
   },
   copilot: {
-    commandsDir: '.github/prompts/custom',
-    rulesDir: '.github/instructions/custom',
+    commandsDir: '.github/prompts',
+    rulesDir: '.github/instructions',
     agentsDir: '.github/agents',
-    templatesDir: 'aidd_docs/templates/custom',
+    skillsDir: null,
     instructions: 'copilot-instructions.md',
     instructionsPath: '.github',
     transform: {
@@ -166,7 +161,7 @@ export function detectAllToolsSync(basePath: string, fsModule: { existsSync: typ
 export function detectToolSync(basePath: string, fsModule: { existsSync: typeof import('fs')['existsSync'] }): ToolType | null {
   for (const [tool, dirs] of Object.entries(TOOL_DIRECTORIES)) {
     const toolType = tool as ToolType;
-    const exists = dirs.some((dir) => fsModule.existsSync(require('path').join(basePath, dir)));
+    const exists = dirs.some((dir) => fsModule.existsSync(join(basePath, dir)));
     if (exists) {
       return toolType;
     }
@@ -197,123 +192,6 @@ export function validateConfig(config: unknown): OverlayConfig {
 }
 
 /**
- * Schema for manifest entries
- */
-export const ManifestEntrySchema = z.object({
-  tool: z.enum(['claude', 'copilot', 'cursor', 'opencode']),
-  version: z.string(),
-  installedAt: z.string().datetime(),
-  files: z.array(z.object({
-    source: z.string(),
-    destination: z.string(),
-    hash: z.string(),
-  })),
-});
-
-/**
- * Schema for plugin entry in manifest
- */
-export const PluginEntrySchema = z.object({
-  name: z.string(),
-  version: z.string(),
-  installedAt: z.string().datetime(),
-  files: z.array(z.object({
-    source: z.string(),
-    destination: z.string(),
-    hash: z.string(),
-  })),
-});
-
-/**
- * Schema for the manifest.json file
- */
-export const ManifestSchema = z.object({
-  baseOverlay: ManifestEntrySchema.optional(),
-  plugins: z.record(z.string(), PluginEntrySchema),
-});
-
-/**
- * Type for manifest
- */
-export type Manifest = z.infer<typeof ManifestSchema>;
-
-/**
- * Validate manifest.json
- */
-export function validateManifest(manifest: unknown): Manifest {
-  return ManifestSchema.parse(manifest);
-}
-
-/**
- * Schema for plugin index entry
- */
-export const PluginIndexEntrySchema = z.object({
-  name: z.string(),
-  version: z.string(),
-  description: z.string().optional(),
-  author: z.string().optional(),
-  dependencies: z.array(z.string()).optional(),
-});
-
-/**
- * Schema for plugin index.json
- */
-export const PluginIndexSchema = z.object({
-  version: z.string(),
-  plugins: z.array(PluginIndexEntrySchema),
-});
-
-/**
- * Type for plugin index
- */
-export type PluginIndex = z.infer<typeof PluginIndexSchema>;
-
-/**
- * Validate plugin index.json
- */
-export function validatePluginIndex(index: unknown): PluginIndex {
-  return PluginIndexSchema.parse(index);
-}
-
-/**
- * Schema for command file frontmatter
- */
-export const CommandFrontmatterSchema = z.object({
-  name: z.string().regex(/^aidd:overlay(:[\w:]+)?$/, 'Invalid command name format'),
-  description: z.string().min(1),
-  argumentHint: z.string().optional(),
-});
-
-/**
- * Type for command frontmatter
- */
-export type CommandFrontmatter = z.infer<typeof CommandFrontmatterSchema>;
-
-/**
- * Parse frontmatter from a markdown command file
- */
-export function parseCommandFrontmatter(content: string): CommandFrontmatter | null {
-  const match = content.match(/^---\n([\s\S]*?)\n---/);
-  if (!match) return null;
-
-  const yaml: Record<string, string> = {};
-  const lines = match[1].split('\n');
-  for (const line of lines) {
-    const colonIndex = line.indexOf(':');
-    if (colonIndex === -1) continue;
-    const key = line.slice(0, colonIndex).trim().replace(/-([a-z])/g, (_, c) => c.toUpperCase());
-    const value = line.slice(colonIndex + 1).trim().replace(/^['"]|['"]$/g, '');
-    if (key) yaml[key] = value;
-  }
-
-  try {
-    return CommandFrontmatterSchema.parse(yaml);
-  } catch {
-    return null;
-  }
-}
-
-/**
  * Path mapping from source to tool-specific paths
  */
 export const PATH_TRANSFORMATIONS: Record<ToolType, (sourcePath: string) => string> = {
@@ -335,84 +213,37 @@ export function transformPath(sourcePath: string, tool: ToolType): string {
  * Get the custom directory for a tool
  */
 export function getToolCustomDir(tool: ToolType): string {
-  const dirs: Record<ToolType, string> = {
-    claude: '.claude/commands/custom',
-    copilot: '.github/prompts/custom',
-    cursor: '.cursor/commands',
-    opencode: '.opencode/commands/aidd/custom',
-  };
-  return dirs[tool];
+  return TOOL_CONFIGS[tool].commandsDir;
 }
 
 /**
- * Get the custom rules directory for a tool
+ * Get the rules directory for a tool
  */
 export function getToolRulesDir(tool: ToolType): string {
-  const dirs: Record<ToolType, string> = {
-    claude: '.claude/rules/custom',
-    copilot: '.github/instructions',
-    cursor: '.cursor/rules',
-    opencode: '.opencode/rules',
-  };
-  return dirs[tool];
+  return TOOL_CONFIGS[tool].rulesDir;
 }
 
 /**
  * Get the agents directory for a tool
  */
 export function getToolAgentsDir(tool: ToolType): string {
-  const dirs: Record<ToolType, string> = {
-    claude: '.claude/agents',
-    copilot: '.github/agents',
-    cursor: '.cursor/agents',
-    opencode: '.opencode/agents',
-  };
-  return dirs[tool];
+  return TOOL_CONFIGS[tool].agentsDir;
 }
 
 /**
- * Tool features support mapping
+ * Tool features support mapping (boolean capabilities only —
+ * instructions/instructionsPath are in TOOL_CONFIGS to avoid duplication)
  */
 export const TOOL_FEATURES: Record<ToolType, {
   commands: boolean;
   rules: boolean;
   agents: boolean;
   skills: boolean;
-  instructions: string | null;
-  instructionsPath: string | null;
 }> = {
-  claude: {
-    commands: true,
-    rules: true,
-    agents: true,
-    skills: true,
-    instructions: 'CLAUDE.md',
-    instructionsPath: null,
-  },
-  opencode: {
-    commands: true,
-    rules: true,
-    agents: true,
-    skills: true,
-    instructions: 'AGENTS.md',
-    instructionsPath: null,
-  },
-  cursor: {
-    commands: true,
-    rules: true,
-    agents: false,
-    skills: false,
-    instructions: '.mdc',
-    instructionsPath: '.cursor/rules',
-  },
-  copilot: {
-    commands: false,
-    rules: true,
-    agents: false,
-    skills: false,
-    instructions: 'copilot-instructions.md',
-    instructionsPath: '.github',
-  },
+  claude:   { commands: true,  rules: true,  agents: true,  skills: true  },
+  opencode: { commands: true,  rules: true,  agents: true,  skills: true  },
+  cursor:   { commands: true,  rules: true,  agents: false, skills: false },
+  copilot:  { commands: false, rules: true,  agents: false, skills: false },
 };
 
 /**
@@ -423,17 +254,17 @@ export function hasFeature(tool: ToolType, feature: 'commands' | 'rules' | 'agen
 }
 
 /**
- * Get instructions file name for a tool
+ * Get instructions file name for a tool (delegates to TOOL_CONFIGS)
  */
 export function getInstructionsFileName(tool: ToolType): string | null {
-  return TOOL_FEATURES[tool].instructions;
+  return TOOL_CONFIGS[tool].instructions;
 }
 
 /**
- * Get instructions destination path for a tool
+ * Get instructions destination path for a tool (delegates to TOOL_CONFIGS)
  */
 export function getInstructionsPath(tool: ToolType): string | null {
-  return TOOL_FEATURES[tool].instructionsPath;
+  return TOOL_CONFIGS[tool].instructionsPath;
 }
 
 /**
@@ -476,13 +307,6 @@ ${description}
 
 ## Instructions
 ${body}
-
-## Quand utiliser
-- Lorsque vous avez besoin de: ${name.toLowerCase()}
-
-## Contexte additionnel
-- Utiliser les standards de codage du projet
-- Vérifier la sécurité et performance
 `;
 }
 
@@ -540,13 +364,6 @@ export function transformCommandsToOpenCode(content: string, filename: string): 
 }
 
 /**
- * Transform rules to OpenCode format
- */
-export function transformRulesToOpenCode(content: string, filename: string): string {
-  return content;
-}
-
-/**
  * Transform agents to OpenCode format
  */
 export function transformAgentsToOpenCode(content: string, filename: string): string {
@@ -584,13 +401,6 @@ export function transformAgentsToOpenCode(content: string, filename: string): st
 }
 
 /**
- * Transform commands to Cursor format
- */
-export function transformCommandsToCursor(content: string, filename: string): string {
-  return content;
-}
-
-/**
  * Get tool configuration
  */
 export function getToolConfig(tool: ToolType): ToolConfig {
@@ -618,107 +428,3 @@ export function getFileCount(dirPath: string): number {
   return count;
 }
 
-/**
- * Get file counts for a plugin's directories
- */
-export interface PluginCounts {
-  commands: number;
-  rules: number;
-  agents: number;
-  templates: number;
-}
-
-export function getPluginCounts(pluginDir: string): PluginCounts {
-  return {
-    commands: getFileCount(join(pluginDir, 'commands')),
-    rules: getFileCount(join(pluginDir, 'rules')),
-    agents: getFileCount(join(pluginDir, 'agents')),
-    templates: getFileCount(join(pluginDir, 'templates')),
-  };
-}
-
-/**
- * Validation result for file count comparison
- */
-export interface ValidationResult {
-  isValid: boolean;
-  details: {
-    category: string;
-    localCount: number;
-    expectedCount: number;
-    overlayCount: number;
-    pluginExtra: number;
-  }[];
-}
-
-/**
- * Compare local files with overlay + plugins expected counts
- */
-export function validateOverlaySync(
-  localPaths: {
-    commands: string;
-    rules: string;
-    agents: string;
-    templates: string;
-  },
-  overlayPaths: {
-    commands: string;
-    rules: string;
-    agents: string;
-    templates: string;
-  },
-  installedPlugins: string[],
-  pluginsDir: string
-): ValidationResult {
-  const categories = [
-    { key: 'commands', name: 'Commands', pluginKey: 'commands' as const },
-    { key: 'rules', name: 'Rules', pluginKey: 'rules' as const },
-    { key: 'agents', name: 'Agents', pluginKey: 'agents' as const },
-    { key: 'templates', name: 'Templates', pluginKey: 'templates' as const },
-  ];
-
-  const details: ValidationResult['details'] = [];
-  let isValid = true;
-
-  for (const cat of categories) {
-    const localCount = getFileCount(localPaths[cat.key as keyof typeof localPaths]);
-    const overlayCount = getFileCount(overlayPaths[cat.key as keyof typeof overlayPaths]);
-    
-    let pluginExtra = 0;
-    if (cat.pluginKey) {
-      for (const pluginName of installedPlugins) {
-        const pluginDir = join(pluginsDir, pluginName);
-        const pluginCount = getPluginCounts(pluginDir)[cat.pluginKey];
-        
-        if (cat.key === 'templates') {
-          const overlayFiles = new Set(
-            readdirSync(overlayPaths.templates).filter(f => f.endsWith('.md'))
-          );
-          const pluginFiles = existsSync(join(pluginDir, 'templates')) 
-            ? readdirSync(join(pluginDir, 'templates')).filter(f => f.endsWith('.md'))
-            : [];
-          const uniqueFromPlugin = pluginFiles.filter(f => !overlayFiles.has(f));
-          pluginExtra += uniqueFromPlugin.length;
-        } else {
-          pluginExtra += pluginCount;
-        }
-      }
-    }
-    
-    const expectedCount = overlayCount + pluginExtra;
-    
-    if (localCount !== expectedCount && localCount > 0) {
-      isValid = false;
-    }
-
-    details.push({
-      category: cat.name,
-      localCount,
-      expectedCount,
-      overlayCount,
-      pluginExtra,
-    });
-  }
-
-  return { isValid, details };
-}

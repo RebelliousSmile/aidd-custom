@@ -4,6 +4,7 @@ import {
   OverlayConfigSchema,
   OverlayConfig,
 } from '../src/index.js';
+import { DEFAULT_OVERLAY_REPO } from '../src/config.js';
 
 describe('Configuration Validation', () => {
   it('should validate a valid config', () => {
@@ -70,13 +71,13 @@ describe('Configuration Validation', () => {
   it('should parse real config from .aidd/config.json', () => {
     const config = {
       overlay: {
-        repo: 'RebelliousSmile/aidd-claude-custom',
+        repo: DEFAULT_OVERLAY_REPO,
         branch: 'main',
       },
     };
 
     const result = validateConfig(config);
-    expect(result.overlay.repo).toBe('RebelliousSmile/aidd-claude-custom');
+    expect(result.overlay.repo).toBe(DEFAULT_OVERLAY_REPO);
     expect(result.overlay.branch).toBe('main');
   });
 });

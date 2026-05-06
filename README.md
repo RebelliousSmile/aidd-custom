@@ -1,90 +1,36 @@
-# AIDD Custom Framework
+# aidd-custom
 
-Custom AIDD (AI-Driven Development) starter with overlay system.
+CLI to install a custom overlay of commands, rules, agents, skills and templates into AI development tool directories (Claude Code, GitHub Copilot, Cursor, OpenCode).
 
-## Installation
-
-### As CLI (global)
+## Install
 
 ```bash
-# Clone and build
-git clone https://github.com/your-org/aidd-custom.git
-cd aidd-custom
-npm install
-npm run build
-
-# Link globally
-npm link
+npm install -g aidd-custom
 ```
 
-Now you can use `aidd-custom` globally:
+## Commands
 
 ```bash
-aidd-custom --help
-aidd-custom install
-aidd-custom update
-aidd-custom clean
-aidd-custom doctor
-aidd-custom plugin list
-aidd-custom plugin add <name>
-aidd-custom plugin remove <name>
+aidd-custom setup -r owner/repo   # Set global overlay repository
+aidd-custom setup                 # Show current configuration
+
+aidd-custom install               # Install overlay into detected tool dirs
+aidd-custom install --global      # Install to ~/.claude (all projects)
+aidd-custom install --no-overlay  # Skip overlay (no-op, prints a message)
+
+aidd-custom clean                 # Remove overlay files tracked by index
+aidd-custom clean --global        # Clean global ~/.claude install
+
+aidd-custom doctor                # Check installation health
 ```
-
-### As library
-
-```bash
-npm install aidd-custom
-```
-
-## Two-Layer System
-
-### 1. Base Overlay (always installed)
-Files from `overlay/` directory installed on every `aidd install`.
-
-### 2. Optional Plugins
-Additional packages from `plugins/` that can be installed/removed.
-
-## Structure
-
-```
-.
-├── .aidd/
-│   └── config.json     # Configuration (repo, branch)
-├── .opencode/
-│   └── commands/overlay/ # Overlay commands
-├── overlay/             # Base files (commands, rules, agents, skills)
-├── plugins/             # Optional plugins
-├── opencode.json
-└── AGENTS.md
-```
-
-## Overlay Commands
-
-```text
-aidd-custom install      # Install base overlay + list plugins
-aidd-custom update       # Check overlay/plugin updates
-aidd-custom clean        # Remove all overlay files
-aidd-custom doctor       # Verify installation health
-
-aidd-custom plugin list     # List available plugins
-aidd-custom plugin add     # Install a plugin
-aidd-custom plugin remove  # Remove a plugin
-```
-
-## Tool Detection
-
-Auto-detects AIDD tool and installs to correct directories:
-
-| Tool | Directory | Commands | Rules | Agents | Skills |
-|------|----------|----------|-------|--------|--------|
-| Claude | `.claude/` | `commands/custom/` | `rules/custom/` | `agents/custom/` | `skills/custom/` |
-| Copilot | `.github/` | `prompts/custom/` | `instructions/custom/` | `agents/custom/` | `skills/custom/` |
-| Cursor | `.cursor/` | `commands/custom/` | `rules/custom/` | `agents/custom/` | `skills/custom/` |
-| OpenCode | `.opencode/` | `commands/custom/` | `rules/custom/` | `agents/custom/` | `skills/custom/` |
 
 ## Configuration
 
-Edit `.aidd/config.json`:
+Priority order (highest to lowest):
+
+1. `.aidd/config.json` in current project
+2. `~/.config/aidd-custom/config.json` (global, set via `aidd-custom setup`)
+3. Built-in default: `RebelliousSmile/aidd-overlay`
 
 ```json
 {
@@ -95,20 +41,41 @@ Edit `.aidd/config.json`:
 }
 ```
 
-## Repository Structure
+## Overlay repository structure
+
+Commands and rules live together in a flat `aidd/` directory. The filename prefix determines the destination:
+
+- `NN_name.md` (underscore) → command → `.<tool>/commands/NN/NN_name.md`
+- `NN-name.md` (dash) → rule → `.<tool>/rules/NN/NN-name.md`
 
 ```
 private-repo/
-├── overlay/           # Base files (always installed)
-│   ├── commands/
-│   ├── rules/
-│   ├── agents/
-│   └── skills/
-├── plugins/          # Optional plugins
-│   ├── my-plugin-1/
-│   │   ├── version.txt
-│   │   ├── index.json
-│   │   └── ...
-│   └── index.json   # Plugin list
-└── README.md
+├── aidd/
+│   ├── 00_behavior.md      # command  → .<tool>/commands/00/00_behavior.md
+│   ├── 01_onboard.md       # command  → .<tool>/commands/01/01_onboard.md
+│   ├── 00-architecture.md  # rule     → .<tool>/rules/00/00-architecture.md
+│   └── 01-standards.md     # rule     → .<tool>/rules/01/01-standards.md
+├── agents/
+│   └── my-agent.md         # → .<tool>/agents/my-agent.md
+├── skills/
+│   └── my-skill/           # subdir preserved as-is (multi-file skills supported)
+│       └── skill.md        # → .<tool>/skills/my-skill/skill.md
+└── templates/
+    └── aidd/               # namespace subdir preserved
+        └── my-template.md  # → aidd_docs/templates/aidd/my-template.md
 ```
+
+**Key rule**: the numeric prefix (`NN`) becomes the subdirectory name; the full filename is kept. Underscore (`_`) after the number = command, dash (`-`) after the number = rule.
+
+## Tool support matrix
+
+| Tool | Commands | Rules | Agents | Skills | Instructions |
+|------|----------|-------|--------|--------|--------------|
+| Claude Code | `.claude/commands` | `.claude/rules` | `.claude/agents` | `.claude/skills` | `CLAUDE.md` |
+| OpenCode | `.opencode/commands/aidd` | `.opencode/rules` | `.opencode/agents` | `.opencode/skills` | `AGENTS.md` |
+| Cursor | `.cursor/commands` | `.cursor/rules` | — | — | `.cursor/rules/*.mdc` |
+| GitHub Copilot | `.github/prompts` | `.github/instructions` | — | — | `.github/copilot-instructions.md` |
+
+## Index-based tracking
+
+All installed files are listed in `.aidd/overlay.json`. `clean` removes exactly those files; `doctor` checks each one is present on disk and compares counts with the remote overlay.

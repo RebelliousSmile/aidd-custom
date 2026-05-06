@@ -1,59 +1,32 @@
-import { existsSync, readFileSync, writeFileSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { existsSync, readFileSync } from 'fs';
+import { join } from 'path';
+import { homedir } from 'os';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const CONFIG_DIR = join(homedir(), '.config', 'aidd-custom');
+export const GLOBAL_CONFIG_FILE = join(CONFIG_DIR, 'config.json');
 
-const PACKAGE_ROOT = join(__dirname, '..');
-export const GLOBAL_CONFIG_FILE = join(PACKAGE_ROOT, 'config.json');
+export const DEFAULT_OVERLAY_REPO = 'RebelliousSmile/aidd-overlay';
 
-export const DEFAULT_OVERLAY_REPO = 'RebelliousSmile/aidd-claude-custom';
-
-export function getGlobalConfig(): { repo: string; branch: string } | null {
-  if (existsSync(GLOBAL_CONFIG_FILE)) {
-    try {
-      const content = readFileSync(GLOBAL_CONFIG_FILE, 'utf-8');
-      const config = JSON.parse(content);
-      if (config.overlay?.repo) {
-        return {
-          repo: config.overlay.repo,
-          branch: config.overlay.branch || 'main',
-        };
-      }
-    } catch (e) {
+function readConfig(path: string): { repo: string; branch: string } | null {
+  if (!existsSync(path)) return null;
+  try {
+    const config = JSON.parse(readFileSync(path, 'utf-8'));
+    if (config.overlay?.repo) {
+      return { repo: config.overlay.repo, branch: config.overlay.branch || 'main' };
     }
-  }
+  } catch {}
   return null;
 }
 
-export function getOverlayConfig(_projectRoot: string): { repo: string; branch: string } | null {
-  const globalConfig = getGlobalConfig();
-  if (globalConfig) return globalConfig;
-
-  return { repo: DEFAULT_OVERLAY_REPO, branch: 'main' };
+export function getGlobalConfig(): { repo: string; branch: string } | null {
+  return readConfig(GLOBAL_CONFIG_FILE);
 }
 
-export function getGlobalPlugins(): Record<string, { installed: boolean }> {
-  if (existsSync(GLOBAL_CONFIG_FILE)) {
-    try {
-      const content = readFileSync(GLOBAL_CONFIG_FILE, 'utf-8');
-      const config = JSON.parse(content);
-      return config.plugins || {};
-    } catch (e) {
-    }
-  }
-  return {};
-}
-
-export function saveGlobalPlugins(plugins: Record<string, { installed: boolean }>): void {
-  let config: Record<string, unknown> = {};
-  if (existsSync(GLOBAL_CONFIG_FILE)) {
-    try {
-      config = JSON.parse(readFileSync(GLOBAL_CONFIG_FILE, 'utf-8'));
-    } catch (e) {
-    }
-  }
-  config.plugins = plugins;
-  writeFileSync(GLOBAL_CONFIG_FILE, JSON.stringify(config, null, 2));
+// Priority: project (.aidd/config.json) > global (~/.config/aidd-custom/config.json) > hardcoded default
+export function getOverlayConfig(projectRoot: string): { repo: string; branch: string } {
+  return (
+    readConfig(join(projectRoot, '.aidd', 'config.json')) ??
+    getGlobalConfig() ??
+    { repo: DEFAULT_OVERLAY_REPO, branch: 'main' }
+  );
 }

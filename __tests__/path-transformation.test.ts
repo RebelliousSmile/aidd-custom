@@ -31,11 +31,11 @@ describe('Path Transformation', () => {
 
   describe('getToolCustomDir', () => {
     it('should return correct custom directory for Claude', () => {
-      expect(getToolCustomDir('claude')).toBe('.claude/commands/custom');
+      expect(getToolCustomDir('claude')).toBe('.claude/commands');
     });
 
     it('should return correct custom directory for Copilot', () => {
-      expect(getToolCustomDir('copilot')).toBe('.github/prompts/custom');
+      expect(getToolCustomDir('copilot')).toBe('.github/prompts');
     });
 
     it('should return correct custom directory for Cursor', () => {
@@ -43,7 +43,7 @@ describe('Path Transformation', () => {
     });
 
     it('should return correct custom directory for OpenCode', () => {
-      expect(getToolCustomDir('opencode')).toBe('.opencode/commands/aidd/custom');
+      expect(getToolCustomDir('opencode')).toBe('.opencode/commands');
     });
   });
 

@@ -22,23 +22,23 @@ describe('CLI Logic Tests', () => {
     it('should fallback to default repo when no config', async () => {
       mockFs.existsSync.mockReturnValue(false);
       
-      const { getOverlayConfig } = await import('../src/config.js');
+      const { getOverlayConfig, DEFAULT_OVERLAY_REPO } = await import('../src/config.js');
       const config = getOverlayConfig('/test/project');
-      
-      expect(config).toEqual({ repo: 'RebelliousSmile/aidd-claude-custom', branch: 'main' });
+
+      expect(config).toEqual({ repo: DEFAULT_OVERLAY_REPO, branch: 'main' });
     });
 
-    it('should use project config if exists', async () => {
+    it('should use global config if config.json exists', async () => {
       mockFs.existsSync.mockImplementation((path) => {
-        return typeof path === 'string' && path.includes('config/global.json');
+        return typeof path === 'string' && path.endsWith('config.json');
       });
       mockFs.readFileSync.mockReturnValue(JSON.stringify({
         overlay: { repo: 'project/repo', branch: 'dev' }
       }));
-      
+
       const { getOverlayConfig } = await import('../src/config.js');
       const config = getOverlayConfig('/test/project');
-      
+
       expect(config).toEqual({ repo: 'project/repo', branch: 'dev' });
     });
 
@@ -87,36 +87,50 @@ describe('CLI Logic Tests', () => {
   describe('DEFAULT_OVERLAY_REPO', () => {
     it('should have correct default value', async () => {
       const { DEFAULT_OVERLAY_REPO } = await import('../src/config.js');
-      expect(DEFAULT_OVERLAY_REPO).toBe('RebelliousSmile/aidd-claude-custom');
+      expect(DEFAULT_OVERLAY_REPO).toBe('RebelliousSmile/aidd-overlay');
     });
   });
 
   describe('TOOL_FEATURES', () => {
-    it('should have correct features for claude', async () => {
+    it('should have correct boolean features for claude', async () => {
       const { TOOL_FEATURES } = await import('../src/index.js');
       expect(TOOL_FEATURES.claude.commands).toBe(true);
       expect(TOOL_FEATURES.claude.rules).toBe(true);
       expect(TOOL_FEATURES.claude.agents).toBe(true);
       expect(TOOL_FEATURES.claude.skills).toBe(true);
-      expect(TOOL_FEATURES.claude.instructions).toBe('CLAUDE.md');
     });
 
-    it('should have correct features for copilot', async () => {
+    it('should have correct boolean features for copilot', async () => {
       const { TOOL_FEATURES } = await import('../src/index.js');
       expect(TOOL_FEATURES.copilot.commands).toBe(false);
       expect(TOOL_FEATURES.copilot.rules).toBe(true);
       expect(TOOL_FEATURES.copilot.agents).toBe(false);
       expect(TOOL_FEATURES.copilot.skills).toBe(false);
-      expect(TOOL_FEATURES.copilot.instructions).toBe('copilot-instructions.md');
     });
 
-    it('should have correct features for cursor', async () => {
+    it('should have correct boolean features for cursor', async () => {
       const { TOOL_FEATURES } = await import('../src/index.js');
       expect(TOOL_FEATURES.cursor.commands).toBe(true);
       expect(TOOL_FEATURES.cursor.rules).toBe(true);
       expect(TOOL_FEATURES.cursor.agents).toBe(false);
       expect(TOOL_FEATURES.cursor.skills).toBe(false);
-      expect(TOOL_FEATURES.cursor.instructionsPath).toBe('.cursor/rules');
+    });
+  });
+
+  describe('getInstructionsFileName / getInstructionsPath', () => {
+    it('should return instructions file names from TOOL_CONFIGS', async () => {
+      const { getInstructionsFileName, getInstructionsPath } = await import('../src/index.js');
+      expect(getInstructionsFileName('claude')).toBe('CLAUDE.md');
+      expect(getInstructionsFileName('opencode')).toBe('AGENTS.md');
+      expect(getInstructionsFileName('copilot')).toBe('copilot-instructions.md');
+      expect(getInstructionsFileName('cursor')).toBe('.mdc');
+    });
+
+    it('should return instructions paths from TOOL_CONFIGS', async () => {
+      const { getInstructionsPath } = await import('../src/index.js');
+      expect(getInstructionsPath('claude')).toBeNull();
+      expect(getInstructionsPath('cursor')).toBe('.cursor/rules');
+      expect(getInstructionsPath('copilot')).toBe('.github');
     });
   });
 
@@ -186,7 +200,6 @@ Faites une revue de code complète.`;
       expect(result).toContain('Description');
       expect(result).toContain('Effectue une revue de code');
       expect(result).toContain('Instructions');
-      expect(result).toContain('Quand utiliser');
     });
   });
 
