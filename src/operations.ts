@@ -1,6 +1,5 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, cpSync, rmSync, statSync } from 'fs';
 import { join, dirname, relative } from 'path';
-import { createHash } from 'crypto';
 import {
   type ToolType,
   getToolConfig,
@@ -18,86 +17,18 @@ export interface OverlayIndex {
   tools?: ToolType[];  // absent for global installs; repairFromOverlay falls back to []
 }
 
-const PROJECT_INDEX = join('.aidd', 'manifest.json');
+const PROJECT_INDEX = join('.aidd', 'aidd-custom.json');
 const GLOBAL_INDEX = 'aidd-overlay.json';
 
 function indexPath(rootDir: string, isGlobal: boolean): string {
   return isGlobal ? join(rootDir, GLOBAL_INDEX) : join(rootDir, PROJECT_INDEX);
 }
 
-function md5File(absPath: string): string {
-  if (!existsSync(absPath)) return '0'.repeat(32);
-  return createHash('md5').update(readFileSync(absPath)).digest('hex');
-}
-
-// Build aidd-cli v2 manifest: { version: 2, repo, tools: { [id]: { version, files, mergeFiles, excludedMcp } }, docs, scripts }
-function toAiddV2(rootDir: string, index: OverlayIndex): object {
-  const toolIds = index.tools ?? [];
-  const toolEntries: Record<string, unknown> = {};
-
-  // Build a set of file paths claimed by each tool based on known destination dirs
-  const claimedByTool = new Map<string, Set<string>>();
-  for (const tool of toolIds) {
-    claimedByTool.set(tool, new Set());
-  }
-
-  for (const relPath of index.files) {
-    let claimed = false;
-    for (const tool of toolIds) {
-      const cfg = getToolConfig(tool);
-      const dirs = [cfg.commandsDir, cfg.agentsDir, cfg.rulesDir, ...(cfg.skillsDir ? [cfg.skillsDir] : [])];
-      if (dirs.some(d => relPath.startsWith(d + '/') || relPath === d)) {
-        claimedByTool.get(tool)!.add(relPath);
-        claimed = true;
-        break;
-      }
-    }
-    // Unclaimed files (e.g. templates) go to the first tool
-    if (!claimed && toolIds.length > 0) {
-      claimedByTool.get(toolIds[0])!.add(relPath);
-    }
-  }
-
-  for (const tool of toolIds) {
-    const files = [...(claimedByTool.get(tool) ?? [])].map(relPath => ({
-      relativePath: relPath,
-      hash: md5File(join(rootDir, relPath)),
-    }));
-    toolEntries[tool] = { version: index.branch, files, mergeFiles: [], excludedMcp: [] };
-  }
-
-  return {
-    version: 2,
-    repo: index.repo,
-    tools: toolEntries,
-    docs: null,
-    scripts: null,
-    installedAt: index.installedAt,
-  };
-}
-
-// Parse aidd-cli v2 manifest back into our OverlayIndex
-function fromAiddV2(raw: Record<string, unknown>): OverlayIndex {
-  const toolsRaw = (raw.tools ?? {}) as Record<string, { version?: string; files?: Array<{ relativePath: string }> }>;
-  const toolIds = Object.keys(toolsRaw) as ToolType[];
-  const files: string[] = toolIds.flatMap(id => (toolsRaw[id]?.files ?? []).map(f => f.relativePath));
-  const branch = toolIds.length > 0 ? (toolsRaw[toolIds[0]]?.version ?? '') : '';
-  return {
-    repo: typeof raw.repo === 'string' ? raw.repo : '',
-    branch,
-    installedAt: typeof raw.installedAt === 'string' ? raw.installedAt : new Date().toISOString(),
-    files,
-    tools: toolIds,
-  };
-}
-
 export function readOverlayIndex(rootDir: string, isGlobal = false): OverlayIndex | null {
   const p = indexPath(rootDir, isGlobal);
   if (!existsSync(p)) return null;
   try {
-    const raw = JSON.parse(readFileSync(p, 'utf-8')) as Record<string, unknown>;
-    if (!isGlobal && raw.version === 2) return fromAiddV2(raw);
-    return raw as unknown as OverlayIndex;
+    return JSON.parse(readFileSync(p, 'utf-8')) as OverlayIndex;
   } catch {
     return null;
   }
@@ -106,8 +37,7 @@ export function readOverlayIndex(rootDir: string, isGlobal = false): OverlayInde
 export function writeOverlayIndex(rootDir: string, index: OverlayIndex, isGlobal = false): void {
   const p = indexPath(rootDir, isGlobal);
   mkdirSync(dirname(p), { recursive: true });
-  const payload = isGlobal ? index : toAiddV2(rootDir, index);
-  writeFileSync(p, JSON.stringify(payload, null, 2));
+  writeFileSync(p, JSON.stringify(index, null, 2));
 }
 
 export function deleteOverlayIndex(rootDir: string, isGlobal = false): void {

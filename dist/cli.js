@@ -251,7 +251,8 @@ program
         }
     }
     catch (e) {
-        console.log('Warning: Could not fetch overlay for validation');
+        const msg = e instanceof Error ? e.message : String(e);
+        console.log(`Warning: Could not fetch overlay for validation — ${msg}`);
     }
     finally {
         if (tempDir)
