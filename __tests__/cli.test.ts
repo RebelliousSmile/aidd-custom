@@ -91,74 +91,37 @@ describe('CLI Logic Tests', () => {
     });
   });
 
-  describe('TOOL_FEATURES', () => {
-    it('should have correct boolean features for claude', async () => {
-      const { TOOL_FEATURES } = await import('../src/index.js');
-      expect(TOOL_FEATURES.claude.commands).toBe(true);
-      expect(TOOL_FEATURES.claude.rules).toBe(true);
-      expect(TOOL_FEATURES.claude.agents).toBe(true);
-      expect(TOOL_FEATURES.claude.skills).toBe(true);
-    });
-
-    it('should have correct boolean features for copilot', async () => {
-      const { TOOL_FEATURES } = await import('../src/index.js');
-      expect(TOOL_FEATURES.copilot.commands).toBe(false);
-      expect(TOOL_FEATURES.copilot.rules).toBe(true);
-      expect(TOOL_FEATURES.copilot.agents).toBe(false);
-      expect(TOOL_FEATURES.copilot.skills).toBe(false);
-    });
-
-    it('should have correct boolean features for cursor', async () => {
-      const { TOOL_FEATURES } = await import('../src/index.js');
-      expect(TOOL_FEATURES.cursor.commands).toBe(true);
-      expect(TOOL_FEATURES.cursor.rules).toBe(true);
-      expect(TOOL_FEATURES.cursor.agents).toBe(false);
-      expect(TOOL_FEATURES.cursor.skills).toBe(false);
-    });
-  });
-
-  describe('getInstructionsFileName / getInstructionsPath', () => {
-    it('should return instructions file names from TOOL_CONFIGS', async () => {
-      const { getInstructionsFileName, getInstructionsPath } = await import('../src/index.js');
-      expect(getInstructionsFileName('claude')).toBe('CLAUDE.md');
-      expect(getInstructionsFileName('opencode')).toBe('AGENTS.md');
-      expect(getInstructionsFileName('copilot')).toBe('copilot-instructions.md');
-      expect(getInstructionsFileName('cursor')).toBe('.mdc');
-    });
-
-    it('should return instructions paths from TOOL_CONFIGS', async () => {
-      const { getInstructionsPath } = await import('../src/index.js');
-      expect(getInstructionsPath('claude')).toBeNull();
-      expect(getInstructionsPath('cursor')).toBe('.cursor/rules');
-      expect(getInstructionsPath('copilot')).toBe('.github');
-    });
-  });
-
   describe('hasFeature', () => {
     it('should return correct feature support', async () => {
       const { hasFeature } = await import('../src/index.js');
-      
+
       expect(hasFeature('claude', 'commands')).toBe(true);
       expect(hasFeature('claude', 'agents')).toBe(true);
       expect(hasFeature('claude', 'skills')).toBe(true);
-      
+
       expect(hasFeature('copilot', 'commands')).toBe(false);
       expect(hasFeature('copilot', 'agents')).toBe(false);
       expect(hasFeature('copilot', 'rules')).toBe(true);
-      
+
       expect(hasFeature('cursor', 'agents')).toBe(false);
       expect(hasFeature('cursor', 'skills')).toBe(false);
     });
   });
 
-  describe('getInstructionsFileName', () => {
-    it('should return correct file names', async () => {
+  describe('getInstructionsFileName / getInstructionsPath', () => {
+    it('should return instructions file names for all tools', async () => {
       const { getInstructionsFileName } = await import('../src/index.js');
-      
       expect(getInstructionsFileName('claude')).toBe('CLAUDE.md');
       expect(getInstructionsFileName('opencode')).toBe('AGENTS.md');
       expect(getInstructionsFileName('copilot')).toBe('copilot-instructions.md');
       expect(getInstructionsFileName('cursor')).toBe('.mdc');
+    });
+
+    it('should return instructions paths for all tools', async () => {
+      const { getInstructionsPath } = await import('../src/index.js');
+      expect(getInstructionsPath('claude')).toBeNull();
+      expect(getInstructionsPath('cursor')).toBe('.cursor/rules');
+      expect(getInstructionsPath('copilot')).toBe('.github');
     });
   });
 

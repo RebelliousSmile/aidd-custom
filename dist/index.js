@@ -1,18 +1,12 @@
 import { z } from 'zod';
 import { existsSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
-/**
- * Directory structure for each tool
- */
 export const TOOL_DIRECTORIES = {
     claude: ['.claude'],
     copilot: ['.github'],
     cursor: ['.cursor'],
     opencode: ['.opencode'],
 };
-/**
- * Tool configurations with specific transformation methods
- */
 export const TOOL_CONFIGS = {
     claude: {
         commandsDir: '.claude/commands',
@@ -21,11 +15,7 @@ export const TOOL_CONFIGS = {
         skillsDir: '.claude/skills',
         instructions: 'CLAUDE.md',
         instructionsPath: null,
-        transform: {
-            commands: null,
-            rules: null,
-            agents: null,
-        },
+        transform: { commands: null, rules: null, agents: null },
     },
     opencode: {
         commandsDir: '.opencode/commands',
@@ -48,11 +38,7 @@ export const TOOL_CONFIGS = {
         skillsDir: null,
         instructions: '.mdc',
         instructionsPath: '.cursor/rules',
-        transform: {
-            commands: null,
-            rules: convertRuleToMdc,
-            agents: null,
-        },
+        transform: { commands: null, rules: convertRuleToMdc, agents: null },
     },
     copilot: {
         commandsDir: '.github/prompts',
@@ -68,224 +54,104 @@ export const TOOL_CONFIGS = {
         },
     },
 };
-/**
- * Detect which AIDD tool is configured based on directory structure
- */
+// ─── tool detection ───────────────────────────────────────────────────────────
+function toolDirsExist(basePath, dirs) {
+    return dirs.some(dir => {
+        try {
+            return existsSync(join(basePath, dir));
+        }
+        catch {
+            return false;
+        }
+    });
+}
 export function detectTool(basePath) {
     for (const [tool, dirs] of Object.entries(TOOL_DIRECTORIES)) {
-        const toolType = tool;
-        const exists = dirs.some((dir) => {
-            try {
-                return existsSync(join(basePath, dir));
-            }
-            catch {
-                return false;
-            }
-        });
-        if (exists) {
-            return toolType;
-        }
+        if (toolDirsExist(basePath, dirs))
+            return tool;
     }
     return null;
 }
-/**
- * Detect all AIDD tools present in the directory
- */
 export function detectAllTools(basePath) {
-    const tools = [];
-    for (const [tool, dirs] of Object.entries(TOOL_DIRECTORIES)) {
-        const toolType = tool;
-        const exists = dirs.some((dir) => {
-            try {
-                return existsSync(join(basePath, dir));
-            }
-            catch {
-                return false;
-            }
-        });
-        if (exists) {
-            tools.push(toolType);
-        }
-    }
-    return tools;
+    return Object.entries(TOOL_DIRECTORIES)
+        .filter(([, dirs]) => toolDirsExist(basePath, dirs))
+        .map(([tool]) => tool);
 }
-/**
- * Detect all tools synchronously with passed fs module (for testing)
- */
-export function detectAllToolsSync(basePath, fsModule) {
-    const tools = [];
-    for (const [tool, dirs] of Object.entries(TOOL_DIRECTORIES)) {
-        const toolType = tool;
-        const exists = dirs.some((dir) => fsModule.existsSync(join(basePath, dir)));
-        if (exists) {
-            tools.push(toolType);
-        }
-    }
-    return tools;
-}
-/**
- * Detect tool synchronously with passed fs module (for testing)
- */
-export function detectToolSync(basePath, fsModule) {
-    for (const [tool, dirs] of Object.entries(TOOL_DIRECTORIES)) {
-        const toolType = tool;
-        const exists = dirs.some((dir) => fsModule.existsSync(join(basePath, dir)));
-        if (exists) {
-            return toolType;
-        }
-    }
-    return null;
-}
-/**
- * Schema for overlay configuration
- */
+// ─── config schema ────────────────────────────────────────────────────────────
 export const OverlayConfigSchema = z.object({
     overlay: z.object({
         repo: z.string().min(1, 'Repository is required'),
         branch: z.string().min(1, 'Branch is required').default('main'),
     }).required(),
 });
-/**
- * Validate overlay configuration from config.json
- */
 export function validateConfig(config) {
     return OverlayConfigSchema.parse(config);
 }
-/**
- * Path mapping from source to tool-specific paths
- */
-export const PATH_TRANSFORMATIONS = {
-    claude: (source) => source.replace(/^overlay\//, '.claude/'),
-    copilot: (source) => source.replace(/^overlay\//, '.github/'),
-    cursor: (source) => source.replace(/^overlay\//, '.cursor/'),
-    opencode: (source) => source,
-};
-/**
- * Transform a source path to the tool-specific destination path
- */
-export function transformPath(sourcePath, tool) {
-    const transformer = PATH_TRANSFORMATIONS[tool];
-    return transformer(sourcePath);
-}
-/**
- * Get the custom directory for a tool
- */
-export function getToolCustomDir(tool) {
-    return TOOL_CONFIGS[tool].commandsDir;
-}
-/**
- * Get the rules directory for a tool
- */
-export function getToolRulesDir(tool) {
-    return TOOL_CONFIGS[tool].rulesDir;
-}
-/**
- * Get the agents directory for a tool
- */
-export function getToolAgentsDir(tool) {
-    return TOOL_CONFIGS[tool].agentsDir;
-}
-/**
- * Tool features support mapping (boolean capabilities only —
- * instructions/instructionsPath are in TOOL_CONFIGS to avoid duplication)
- */
+// ─── tool metadata ────────────────────────────────────────────────────────────
 export const TOOL_FEATURES = {
     claude: { commands: true, rules: true, agents: true, skills: true },
     opencode: { commands: true, rules: true, agents: true, skills: true },
     cursor: { commands: true, rules: true, agents: false, skills: false },
     copilot: { commands: false, rules: true, agents: false, skills: false },
 };
-/**
- * Check if a tool supports a specific feature
- */
 export function hasFeature(tool, feature) {
     return TOOL_FEATURES[tool][feature];
 }
-/**
- * Get instructions file name for a tool (delegates to TOOL_CONFIGS)
- */
+export function getToolConfig(tool) {
+    return TOOL_CONFIGS[tool];
+}
 export function getInstructionsFileName(tool) {
     return TOOL_CONFIGS[tool].instructions;
 }
-/**
- * Get instructions destination path for a tool (delegates to TOOL_CONFIGS)
- */
 export function getInstructionsPath(tool) {
     return TOOL_CONFIGS[tool].instructionsPath;
 }
-/**
- * Convert a rule file to MDC format for Cursor
- */
-export function convertRuleToMdc(content, filename) {
-    const name = filename.replace(/\.md$/, '').replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-    const hasFrontmatter = content.startsWith('---');
-    if (hasFrontmatter) {
-        return content;
+// ─── format transforms ────────────────────────────────────────────────────────
+function parseFrontmatter(content) {
+    const match = content.match(/^---\n([\s\S]*?)\n---/);
+    if (!match)
+        return {};
+    const result = {};
+    for (const line of match[1].split('\n')) {
+        const colonIndex = line.indexOf(':');
+        if (colonIndex === -1)
+            continue;
+        const key = line.slice(0, colonIndex).trim();
+        const value = line.slice(colonIndex + 1).trim().replace(/^['"]|['"]$/g, '');
+        if (key && value)
+            result[key] = value;
     }
-    const description = content.slice(0, 200).split('\n')[0].replace(/^#*\s*/, '');
-    return `---
-description: ${description || name}
----
-# ${name}
-
-${content}
-`;
+    return result;
 }
-/**
- * Convert a command to Copilot prompt format
- */
+function extractBody(content) {
+    const bodyStart = content.indexOf('---', 3);
+    return bodyStart > -1 ? content.slice(bodyStart + 3).trim() : content;
+}
+export function convertRuleToMdc(content, filename) {
+    if (content.startsWith('---'))
+        return content;
+    const name = filename.replace(/\.md$/, '').replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    const description = content.slice(0, 200).split('\n')[0].replace(/^#*\s*/, '');
+    return `---\ndescription: ${description || name}\n---\n# ${name}\n\n${content}\n`;
+}
 export function convertCommandToPrompt(commandContent, filename) {
     const name = filename.replace(/\.md$/, '').replace(/-/g, ' ');
     const descriptionMatch = commandContent.match(/description:\s*(.+)/);
     const description = descriptionMatch ? descriptionMatch[1] : name;
-    const bodyStart = commandContent.indexOf('---', 3);
-    const body = bodyStart > -1 ? commandContent.slice(bodyStart + 3).trim() : commandContent;
-    return `# ${name}
-
-## Description
-${description}
-
-## Instructions
-${body}
-`;
+    const body = extractBody(commandContent);
+    return `# ${name}\n\n## Description\n${description}\n\n## Instructions\n${body}\n`;
 }
-/**
- * Convert rules content to Copilot instructions format
- */
 export function convertRulesToCopilotInstructions(rulesContent, filename) {
     const name = filename.replace(/\.md$/, '').replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-    return `---
-applyTo: "**"
----
-# ${name}
-
-${rulesContent}
-`;
+    return `---\napplyTo: "**"\n---\n# ${name}\n\n${rulesContent}\n`;
 }
-/**
- * Transform commands to OpenCode format
- */
 export function transformCommandsToOpenCode(content, filename) {
-    const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
-    let frontmatter = {};
-    if (frontmatterMatch) {
-        const lines = frontmatterMatch[1].split('\n');
-        for (const line of lines) {
-            const colonIndex = line.indexOf(':');
-            if (colonIndex === -1)
-                continue;
-            const key = line.slice(0, colonIndex).trim();
-            const value = line.slice(colonIndex + 1).trim().replace(/^['"]|['"]$/g, '');
-            if (key && value)
-                frontmatter[key] = value;
-        }
-    }
+    const fm = parseFrontmatter(content);
     const name = filename.replace(/\.md$/, '');
-    const description = frontmatter.description || name;
-    const argumentHint = frontmatter['argument-hint'] || '';
-    const bodyStart = content.indexOf('---', 3);
-    const body = bodyStart > -1 ? content.slice(bodyStart + 3).trim() : content;
-    const newFrontmatter = [
+    const description = fm.description || name;
+    const argumentHint = fm['argument-hint'] || '';
+    const body = extractBody(content);
+    return [
         '---',
         `name: ${name}`,
         `description: ${description}`,
@@ -294,64 +160,34 @@ export function transformCommandsToOpenCode(content, filename) {
         '',
         body,
     ].filter(Boolean).join('\n');
-    return newFrontmatter;
 }
-/**
- * Transform agents to OpenCode format
- */
 export function transformAgentsToOpenCode(content, filename) {
-    const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
-    let frontmatter = {};
-    if (frontmatterMatch) {
-        const lines = frontmatterMatch[1].split('\n');
-        for (const line of lines) {
-            const colonIndex = line.indexOf(':');
-            if (colonIndex === -1)
-                continue;
-            const key = line.slice(0, colonIndex).trim();
-            const value = line.slice(colonIndex + 1).trim().replace(/^['"]|['"]$/g, '');
-            if (key && value)
-                frontmatter[key] = value;
-        }
-    }
+    const fm = parseFrontmatter(content);
     const name = filename.replace(/\.md$/, '');
-    const description = frontmatter.description || `Agent for ${name}`;
-    const newFrontmatter = [
+    const description = fm.description || `Agent for ${name}`;
+    const header = [
         '---',
         `description: ${description}`,
-        frontmatter.mode ? `mode: ${frontmatter.mode}` : 'mode: subagent',
-        frontmatter.model ? `model: ${frontmatter.model}` : '',
-        frontmatter.temperature ? `temperature: ${frontmatter.temperature}` : '',
+        `mode: ${fm.mode || 'subagent'}`,
+        fm.model ? `model: ${fm.model}` : '',
+        fm.temperature ? `temperature: ${fm.temperature}` : '',
         '---',
         '',
     ].filter(Boolean).join('\n');
-    const bodyStart = content.indexOf('---', 3);
-    const body = bodyStart > -1 ? content.slice(bodyStart + 3).trim() : content;
-    return `${newFrontmatter}\n${body}`;
+    return `${header}\n${extractBody(content)}`;
 }
-/**
- * Get tool configuration
- */
-export function getToolConfig(tool) {
-    return TOOL_CONFIGS[tool];
-}
-/**
- * Count .md files recursively in a directory
- */
+// ─── file utilities ───────────────────────────────────────────────────────────
 export function getFileCount(dirPath) {
     if (!existsSync(dirPath))
         return 0;
     let count = 0;
     const walk = (d) => {
-        const items = readdirSync(d);
-        for (const item of items) {
-            const fullPath = join(d, item);
-            if (statSync(fullPath).isDirectory()) {
-                walk(fullPath);
-            }
-            else if (item.endsWith('.md')) {
+        for (const item of readdirSync(d)) {
+            const full = join(d, item);
+            if (statSync(full).isDirectory())
+                walk(full);
+            else if (item.endsWith('.md'))
                 count++;
-            }
         }
     };
     walk(dirPath);

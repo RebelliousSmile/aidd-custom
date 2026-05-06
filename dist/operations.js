@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, cpSync, rmSync, statSync } from 'fs';
 import { join, dirname, relative } from 'path';
-import { getToolConfig, getToolAgentsDir, getFileCount, hasFeature, } from './index.js';
+import { getToolConfig, getFileCount, hasFeature, } from './index.js';
 const PROJECT_INDEX = join('.aidd', 'overlay.json');
 const GLOBAL_INDEX = 'aidd-overlay.json';
 function indexPath(rootDir, isGlobal) {
@@ -92,14 +92,14 @@ export function installToolOverlay(tool, projectRoot, overlayTempDir) {
     installAiddContent(tool, projectRoot, overlayTempDir, installed);
     if (hasFeature(tool, 'agents')) {
         const srcDir = join(overlayTempDir, 'agents');
-        const destDir = join(projectRoot, getToolAgentsDir(tool));
+        const destDir = join(projectRoot, getToolConfig(tool).agentsDir);
         if (existsSync(srcDir)) {
             mkdirSync(destDir, { recursive: true });
             const files = readdirSync(srcDir).filter(f => f.endsWith('.md'));
             for (const file of files) {
                 const content = readFileSync(join(srcDir, file), 'utf-8');
                 writeFileSync(join(destDir, file), cfg.transform.agents ? cfg.transform.agents(content, file) : content);
-                installed.push(norm(join(getToolAgentsDir(tool), file)));
+                installed.push(norm(join(getToolConfig(tool).agentsDir, file)));
             }
         }
     }

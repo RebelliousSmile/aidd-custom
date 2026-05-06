@@ -3,7 +3,6 @@ import { join, dirname, basename, relative } from 'path';
 import {
   type ToolType,
   getToolConfig,
-  getToolAgentsDir,
   getFileCount,
   hasFeature,
 } from './index.js';
@@ -120,14 +119,14 @@ export function installToolOverlay(tool: ToolType, projectRoot: string, overlayT
 
   if (hasFeature(tool, 'agents')) {
     const srcDir = join(overlayTempDir, 'agents');
-    const destDir = join(projectRoot, getToolAgentsDir(tool));
+    const destDir = join(projectRoot, getToolConfig(tool).agentsDir);
     if (existsSync(srcDir)) {
       mkdirSync(destDir, { recursive: true });
       const files = readdirSync(srcDir).filter(f => f.endsWith('.md'));
       for (const file of files) {
         const content = readFileSync(join(srcDir, file), 'utf-8');
         writeFileSync(join(destDir, file), cfg.transform.agents ? cfg.transform.agents(content, file) : content);
-        installed.push(norm(join(getToolAgentsDir(tool), file)));
+        installed.push(norm(join(getToolConfig(tool).agentsDir, file)));
       }
     }
   }
