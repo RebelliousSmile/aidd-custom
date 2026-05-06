@@ -22,6 +22,8 @@ aidd-custom clean                 # Remove overlay files tracked by index
 aidd-custom clean --global        # Clean global ~/.claude install
 
 aidd-custom doctor                # Check installation health (creates manifest if missing)
+aidd-custom rehash                # Build hash baseline from installed files (no reinstall)
+aidd-custom rehash --global       # Rehash global ~/.claude install
 ```
 
 ## Configuration
@@ -78,6 +80,15 @@ private-repo/
 
 ## Index-based tracking
 
-All installed files are listed in `.aidd/overlay.json`. `clean` removes exactly those files; `doctor` checks each one is present on disk and compares counts with the remote overlay.
+All installed files are listed in `.aidd/aidd-custom.json`. `clean` removes exactly those files; `doctor` checks each one is present on disk, compares counts with the remote overlay, and reports per-file content status:
 
-If `.aidd/overlay.json` is missing, `doctor` creates it automatically by cloning the overlay and indexing the installed files — no need to re-run `install` manually.
+| Symbol | Meaning |
+|--------|---------|
+| `✓` | All files up to date |
+| `↑` | Overlay updated — run `install` to apply |
+| `~` | Locally modified |
+| `⚡` | Both overlay updated and locally modified |
+
+A SHA1 hash of each file's content is stored at install time as the baseline. On existing installs without a baseline, run `rehash` once to initialize it from the files currently on disk.
+
+If `.aidd/aidd-custom.json` is missing, `doctor` creates it automatically by cloning the overlay and indexing the installed files — no need to re-run `install` manually.
