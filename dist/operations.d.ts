@@ -24,11 +24,12 @@ export interface InstallStatus {
     missing: string[];
 }
 export declare function checkInstallStatus(rootDir: string, isGlobal?: boolean): InstallStatus;
-export interface OverlayComparison {
+interface OverlayComparison {
     indexedCount: number;
     overlayCount: number;
     inSync: boolean;
     missingFromDisk: string[];
 }
 export declare function compareWithOverlay(rootDir: string, overlayTempDir: string, isGlobal?: boolean): OverlayComparison;
+export {};
 //# sourceMappingURL=operations.d.ts.map

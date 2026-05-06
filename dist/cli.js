@@ -3,7 +3,7 @@ import { Command } from 'commander';
 import { detectAllTools, } from './index.js';
 import { getOverlayConfig, getGlobalConfig, GLOBAL_CONFIG_FILE } from './config.js';
 import { installToolOverlay, installTemplates, installGlobalOverlay, writeOverlayIndex, cleanByIndex, checkInstallStatus, compareWithOverlay, repairFromOverlay, } from './operations.js';
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'fs';
+import { mkdirSync, rmSync, writeFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { homedir, tmpdir } from 'os';
 import { randomUUID } from 'crypto';
@@ -13,6 +13,21 @@ function validateShellParam(value, label) {
         console.error(`Error: invalid ${label} "${value}" — only alphanumeric, ., /, @, - allowed`);
         process.exit(1);
     }
+}
+function cloneToTemp(repo, branch, cwd) {
+    const tempDir = join(tmpdir(), 'aidd-custom', `overlay-${randomUUID()}`);
+    mkdirSync(tempDir, { recursive: true });
+    try {
+        execSync(`git clone --depth 1 --branch ${branch} https://github.com/${repo}.git "${tempDir}"`, {
+            ...(cwd ? { cwd } : {}),
+            stdio: 'pipe',
+        });
+    }
+    catch (e) {
+        rmSync(tempDir, { recursive: true, force: true });
+        throw e;
+    }
+    return tempDir;
 }
 const GLOBAL_CLAUDE_DIR = join(homedir(), '.claude');
 const program = new Command();
@@ -67,13 +82,9 @@ program
         validateShellParam(overlayConfig.branch, 'branch');
         console.log(`Installing globally to ${globalRoot}`);
         console.log(`Overlay: ${overlayConfig.repo} (branch: ${overlayConfig.branch})\n`);
-        const tempDir = join(tmpdir(), 'aidd-custom', `overlay-${randomUUID()}`);
-        mkdirSync(tempDir, { recursive: true });
+        let tempDir;
         try {
-            const repoUrl = `https://github.com/${overlayConfig.repo}.git`;
-            execSync(`git clone --depth 1 --branch ${overlayConfig.branch} ${repoUrl} "${tempDir}"`, {
-                stdio: 'pipe',
-            });
+            tempDir = cloneToTemp(overlayConfig.repo, overlayConfig.branch);
             const files = installGlobalOverlay(globalRoot, tempDir);
             writeOverlayIndex(globalRoot, {
                 repo: overlayConfig.repo,
@@ -87,7 +98,7 @@ program
             console.error(`Error installing overlay: ${e}`);
         }
         finally {
-            if (existsSync(tempDir))
+            if (tempDir)
                 rmSync(tempDir, { recursive: true, force: true });
         }
         return;
@@ -107,14 +118,9 @@ program
     validateShellParam(overlayConfig.repo, 'repo');
     validateShellParam(overlayConfig.branch, 'branch');
     console.log(`Installing overlay from ${overlayConfig.repo} (branch: ${overlayConfig.branch})`);
-    const tempDir = join(tmpdir(), 'aidd-custom', `overlay-${randomUUID()}`);
-    mkdirSync(tempDir, { recursive: true });
+    let tempDir;
     try {
-        const repoUrl = `https://github.com/${overlayConfig.repo}.git`;
-        execSync(`git clone --depth 1 --branch ${overlayConfig.branch} ${repoUrl} "${tempDir}"`, {
-            cwd: projectRoot,
-            stdio: 'pipe',
-        });
+        tempDir = cloneToTemp(overlayConfig.repo, overlayConfig.branch, projectRoot);
         const allFiles = [];
         for (const tool of tools) {
             console.log(`\n=== Installing for ${tool} ===`);
@@ -129,11 +135,12 @@ program
             tools,
         });
         console.log(`\nInstalled ${allFiles.length} file(s)`);
-        rmSync(tempDir, { recursive: true, force: true });
     }
     catch (e) {
         console.error(`Error installing overlay: ${e}`);
-        if (existsSync(tempDir))
+    }
+    finally {
+        if (tempDir)
             rmSync(tempDir, { recursive: true, force: true });
     }
 });
@@ -184,6 +191,8 @@ program
         return;
     }
     console.log(`✓ Installed from ${status.repo} @ ${status.branch}`);
+    if (status.installedAt)
+        console.log(`  Installed: ${new Date(status.installedAt).toLocaleString()}`);
     console.log(`  ${status.present}/${status.indexed} files present`);
     if (status.missing.length > 0) {
         console.log('  Missing:');
@@ -195,14 +204,9 @@ program
     validateShellParam(overlayConfig.branch, 'branch');
     console.log('\n=== File Count Validation ===');
     console.log('Fetching overlay to compare counts...\n');
-    const tempDir = join(tmpdir(), 'aidd-custom', `doctor-${randomUUID()}`);
-    mkdirSync(tempDir, { recursive: true });
+    let tempDir;
     try {
-        const repoUrl = `https://github.com/${overlayConfig.repo}.git`;
-        execSync(`git clone --depth 1 --branch ${overlayConfig.branch} ${repoUrl} "${tempDir}"`, {
-            cwd: projectRoot,
-            stdio: 'pipe',
-        });
+        tempDir = cloneToTemp(overlayConfig.repo, overlayConfig.branch, projectRoot);
         const cmp = compareWithOverlay(projectRoot, tempDir);
         if (cmp.inSync) {
             console.log(`✓ In sync (${cmp.indexedCount} indexed, ${cmp.overlayCount} in overlay)`);
@@ -226,7 +230,7 @@ program
         console.log('Warning: Could not fetch overlay for validation');
     }
     finally {
-        if (existsSync(tempDir))
+        if (tempDir)
             rmSync(tempDir, { recursive: true, force: true });
     }
 });

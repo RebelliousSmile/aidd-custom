@@ -4,7 +4,7 @@ import { join } from 'path';
 
 export type ToolType = 'claude' | 'copilot' | 'cursor' | 'opencode';
 
-export type TransformFn = (content: string, filename: string) => string;
+type TransformFn = (content: string, filename: string) => string;
 
 export interface ToolConfig {
   commandsDir: string;
@@ -13,7 +13,6 @@ export interface ToolConfig {
   skillsDir: string | null;
   instructions: string | null;
   instructionsPath: string | null;
-  configFile?: string;
   transform: {
     commands: TransformFn | null;
     rules: TransformFn | null;
@@ -45,7 +44,6 @@ export const TOOL_CONFIGS: Record<ToolType, ToolConfig> = {
     skillsDir: '.opencode/skills',
     instructions: 'AGENTS.md',
     instructionsPath: null,
-    configFile: 'opencode.json',
     transform: {
       commands: transformCommandsToOpenCode,
       rules: null,
@@ -115,7 +113,7 @@ export function validateConfig(config: unknown): OverlayConfig {
 
 // ─── tool metadata ────────────────────────────────────────────────────────────
 
-export const TOOL_FEATURES: Record<ToolType, {
+const TOOL_FEATURES: Record<ToolType, {
   commands: boolean;
   rules: boolean;
   agents: boolean;
@@ -184,7 +182,7 @@ export function convertRulesToCopilotInstructions(rulesContent: string, filename
   return `---\napplyTo: "**"\n---\n# ${name}\n\n${rulesContent}\n`;
 }
 
-export function transformCommandsToOpenCode(content: string, filename: string): string {
+function transformCommandsToOpenCode(content: string, filename: string): string {
   const fm = parseFrontmatter(content);
   const name = filename.replace(/\.md$/, '');
   const description = fm.description || name;
@@ -201,7 +199,7 @@ export function transformCommandsToOpenCode(content: string, filename: string): 
   ].filter(Boolean).join('\n');
 }
 
-export function transformAgentsToOpenCode(content: string, filename: string): string {
+function transformAgentsToOpenCode(content: string, filename: string): string {
   const fm = parseFrontmatter(content);
   const name = filename.replace(/\.md$/, '');
   const description = fm.description || `Agent for ${name}`;
