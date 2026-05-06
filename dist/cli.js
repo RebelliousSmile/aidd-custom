@@ -182,13 +182,40 @@ program
     }
     console.log(`Tools: ${tools.join(', ')}`);
     console.log(`Project: ${projectRoot}\n`);
+    const overlayConfig = getOverlayConfig(projectRoot);
+    validateShellParam(overlayConfig.repo, 'repo');
+    validateShellParam(overlayConfig.branch, 'branch');
     console.log('=== Installation Status ===');
-    const status = checkInstallStatus(projectRoot);
+    let status = checkInstallStatus(projectRoot);
     console.log('');
     if (status.notIndexed) {
-        console.log('✗ Not installed (no index found)');
-        console.log('Run: aidd-custom install');
-        return;
+        console.log('⚠ No manifest found — creating it...\n');
+        let tempDir;
+        try {
+            tempDir = cloneToTemp(overlayConfig.repo, overlayConfig.branch, projectRoot);
+            const allFiles = [];
+            for (const tool of tools) {
+                allFiles.push(...installToolOverlay(tool, projectRoot, tempDir));
+            }
+            allFiles.push(...installTemplates(projectRoot, tempDir));
+            writeOverlayIndex(projectRoot, {
+                repo: overlayConfig.repo,
+                branch: overlayConfig.branch,
+                installedAt: new Date().toISOString(),
+                files: allFiles,
+                tools,
+            });
+            console.log(`✓ Manifest created (${allFiles.length} file(s) indexed)`);
+            status = checkInstallStatus(projectRoot);
+        }
+        catch (e) {
+            console.error(`Error creating manifest: ${e}`);
+            process.exit(1);
+        }
+        finally {
+            if (tempDir)
+                rmSync(tempDir, { recursive: true, force: true });
+        }
     }
     console.log(`✓ Installed from ${status.repo} @ ${status.branch}`);
     if (status.installedAt)
@@ -199,9 +226,6 @@ program
         for (const f of status.missing)
             console.log(`    - ${f}`);
     }
-    const overlayConfig = getOverlayConfig(projectRoot);
-    validateShellParam(overlayConfig.repo, 'repo');
-    validateShellParam(overlayConfig.branch, 'branch');
     console.log('\n=== File Count Validation ===');
     console.log('Fetching overlay to compare counts...\n');
     let tempDir;

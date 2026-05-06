@@ -21,7 +21,7 @@ aidd-custom install --no-overlay  # Skip overlay (no-op, prints a message)
 aidd-custom clean                 # Remove overlay files tracked by index
 aidd-custom clean --global        # Clean global ~/.claude install
 
-aidd-custom doctor                # Check installation health
+aidd-custom doctor                # Check installation health (creates manifest if missing)
 ```
 
 ## Configuration
@@ -79,3 +79,5 @@ private-repo/
 ## Index-based tracking
 
 All installed files are listed in `.aidd/overlay.json`. `clean` removes exactly those files; `doctor` checks each one is present on disk and compares counts with the remote overlay.
+
+If `.aidd/overlay.json` is missing, `doctor` creates it automatically by cloning the overlay and indexing the installed files — no need to re-run `install` manually.
