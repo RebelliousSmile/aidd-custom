@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, cpSync, rmSync, statSync } from 'fs';
-import { join, dirname, basename, relative } from 'path';
+import { join, dirname, relative } from 'path';
 import {
   type ToolType,
   getToolConfig,
@@ -259,7 +259,7 @@ export function checkInstallStatus(rootDir: string, isGlobal = false): InstallSt
   };
 }
 
-export interface OverlayComparison {
+interface OverlayComparison {
   indexedCount: number;
   overlayCount: number;
   inSync: boolean;

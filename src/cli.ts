@@ -15,7 +15,7 @@ import {
   compareWithOverlay,
   repairFromOverlay,
 } from './operations.js';
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'fs';
+import { mkdirSync, rmSync, writeFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { homedir, tmpdir } from 'os';
 import { randomUUID } from 'crypto';
@@ -26,6 +26,21 @@ function validateShellParam(value: string, label: string): void {
     console.error(`Error: invalid ${label} "${value}" — only alphanumeric, ., /, @, - allowed`);
     process.exit(1);
   }
+}
+
+function cloneToTemp(repo: string, branch: string, cwd?: string): string {
+  const tempDir = join(tmpdir(), 'aidd-custom', `overlay-${randomUUID()}`);
+  mkdirSync(tempDir, { recursive: true });
+  try {
+    execSync(`git clone --depth 1 --branch ${branch} https://github.com/${repo}.git "${tempDir}"`, {
+      ...(cwd ? { cwd } : {}),
+      stdio: 'pipe',
+    });
+  } catch (e) {
+    rmSync(tempDir, { recursive: true, force: true });
+    throw e;
+  }
+  return tempDir;
 }
 
 const GLOBAL_CLAUDE_DIR = join(homedir(), '.claude');
@@ -91,14 +106,9 @@ program
       console.log(`Installing globally to ${globalRoot}`);
       console.log(`Overlay: ${overlayConfig.repo} (branch: ${overlayConfig.branch})\n`);
 
-      const tempDir = join(tmpdir(), 'aidd-custom', `overlay-${randomUUID()}`);
-      mkdirSync(tempDir, { recursive: true });
-
+      let tempDir: string | undefined;
       try {
-        const repoUrl = `https://github.com/${overlayConfig.repo}.git`;
-        execSync(`git clone --depth 1 --branch ${overlayConfig.branch} ${repoUrl} "${tempDir}"`, {
-          stdio: 'pipe',
-        });
+        tempDir = cloneToTemp(overlayConfig.repo, overlayConfig.branch);
         const files = installGlobalOverlay(globalRoot, tempDir);
         writeOverlayIndex(globalRoot, {
           repo: overlayConfig.repo,
@@ -110,7 +120,7 @@ program
       } catch (e) {
         console.error(`Error installing overlay: ${e}`);
       } finally {
-        if (existsSync(tempDir)) rmSync(tempDir, { recursive: true, force: true });
+        if (tempDir) rmSync(tempDir, { recursive: true, force: true });
       }
 
       return;
@@ -136,23 +146,15 @@ program
 
     console.log(`Installing overlay from ${overlayConfig.repo} (branch: ${overlayConfig.branch})`);
 
-    const tempDir = join(tmpdir(), 'aidd-custom', `overlay-${randomUUID()}`);
-    mkdirSync(tempDir, { recursive: true });
-
+    let tempDir: string | undefined;
     try {
-      const repoUrl = `https://github.com/${overlayConfig.repo}.git`;
-      execSync(`git clone --depth 1 --branch ${overlayConfig.branch} ${repoUrl} "${tempDir}"`, {
-        cwd: projectRoot,
-        stdio: 'pipe',
-      });
-
+      tempDir = cloneToTemp(overlayConfig.repo, overlayConfig.branch, projectRoot);
       const allFiles: string[] = [];
       for (const tool of tools) {
         console.log(`\n=== Installing for ${tool} ===`);
         allFiles.push(...installToolOverlay(tool, projectRoot, tempDir));
       }
       allFiles.push(...installTemplates(projectRoot, tempDir));
-
       writeOverlayIndex(projectRoot, {
         repo: overlayConfig.repo,
         branch: overlayConfig.branch,
@@ -161,10 +163,10 @@ program
         tools,
       });
       console.log(`\nInstalled ${allFiles.length} file(s)`);
-      rmSync(tempDir, { recursive: true, force: true });
     } catch (e) {
       console.error(`Error installing overlay: ${e}`);
-      if (existsSync(tempDir)) rmSync(tempDir, { recursive: true, force: true });
+    } finally {
+      if (tempDir) rmSync(tempDir, { recursive: true, force: true });
     }
 
   });
@@ -233,16 +235,9 @@ program
     console.log('\n=== File Count Validation ===');
     console.log('Fetching overlay to compare counts...\n');
 
-    const tempDir = join(tmpdir(), 'aidd-custom', `doctor-${randomUUID()}`);
-    mkdirSync(tempDir, { recursive: true });
-
+    let tempDir: string | undefined;
     try {
-      const repoUrl = `https://github.com/${overlayConfig.repo}.git`;
-      execSync(`git clone --depth 1 --branch ${overlayConfig.branch} ${repoUrl} "${tempDir}"`, {
-        cwd: projectRoot,
-        stdio: 'pipe',
-      });
-
+      tempDir = cloneToTemp(overlayConfig.repo, overlayConfig.branch, projectRoot);
       const cmp = compareWithOverlay(projectRoot, tempDir);
       if (cmp.inSync) {
         console.log(`✓ In sync (${cmp.indexedCount} indexed, ${cmp.overlayCount} in overlay)`);
@@ -261,7 +256,7 @@ program
     } catch (e) {
       console.log('Warning: Could not fetch overlay for validation');
     } finally {
-      if (existsSync(tempDir)) rmSync(tempDir, { recursive: true, force: true });
+      if (tempDir) rmSync(tempDir, { recursive: true, force: true });
     }
   });
 

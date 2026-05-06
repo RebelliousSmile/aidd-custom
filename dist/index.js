@@ -24,7 +24,6 @@ export const TOOL_CONFIGS = {
         skillsDir: '.opencode/skills',
         instructions: 'AGENTS.md',
         instructionsPath: null,
-        configFile: 'opencode.json',
         transform: {
             commands: transformCommandsToOpenCode,
             rules: null,
@@ -88,7 +87,7 @@ export function validateConfig(config) {
     return OverlayConfigSchema.parse(config);
 }
 // ─── tool metadata ────────────────────────────────────────────────────────────
-export const TOOL_FEATURES = {
+const TOOL_FEATURES = {
     claude: { commands: true, rules: true, agents: true, skills: true },
     opencode: { commands: true, rules: true, agents: true, skills: true },
     cursor: { commands: true, rules: true, agents: false, skills: false },
@@ -145,7 +144,7 @@ export function convertRulesToCopilotInstructions(rulesContent, filename) {
     const name = filename.replace(/\.md$/, '').replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
     return `---\napplyTo: "**"\n---\n# ${name}\n\n${rulesContent}\n`;
 }
-export function transformCommandsToOpenCode(content, filename) {
+function transformCommandsToOpenCode(content, filename) {
     const fm = parseFrontmatter(content);
     const name = filename.replace(/\.md$/, '');
     const description = fm.description || name;
@@ -161,7 +160,7 @@ export function transformCommandsToOpenCode(content, filename) {
         body,
     ].filter(Boolean).join('\n');
 }
-export function transformAgentsToOpenCode(content, filename) {
+function transformAgentsToOpenCode(content, filename) {
     const fm = parseFrontmatter(content);
     const name = filename.replace(/\.md$/, '');
     const description = fm.description || `Agent for ${name}`;
