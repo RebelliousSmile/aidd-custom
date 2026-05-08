@@ -4,6 +4,7 @@ import { join } from 'path';
 import {
   installToolOverlay,
   installTemplates,
+  installMemory,
   installGlobalOverlay,
   cleanByIndex,
   checkInstallStatus,
@@ -47,6 +48,9 @@ function buildOverlay(overlayDir: string) {
 
   mkdir(overlayDir, 'templates', 'aidd');
   touch(join(overlayDir, 'templates', 'aidd', 'tmpl.md'));
+
+  mkdir(overlayDir, 'memory');
+  touch(join(overlayDir, 'memory', 'mem.md'));
 }
 
 // ---------- suite setup ----------
@@ -246,6 +250,28 @@ describe('installTemplates', () => {
   it('is a no-op when overlay has no templates', () => {
     rmSync(join(overlayDir, 'templates'), { recursive: true, force: true });
     const files = installTemplates(projectDir, overlayDir);
+    expect(files).toHaveLength(0);
+  });
+});
+
+// ============================================================
+// installMemory
+// ============================================================
+
+describe('installMemory', () => {
+  it('copies memory files to aidd_docs/memory/external preserving subdir', () => {
+    installMemory(projectDir, overlayDir);
+    expect(existsSync(join(projectDir, 'aidd_docs', 'memory', 'external', 'mem.md'))).toBe(true);
+  });
+
+  it('returns list of installed paths', () => {
+    const files = installMemory(projectDir, overlayDir);
+    expect(files.some(f => f.includes('mem.md'))).toBe(true);
+  });
+
+  it('is a no-op when overlay has no memory folder', () => {
+    rmSync(join(overlayDir, 'memory'), { recursive: true, force: true });
+    const files = installMemory(projectDir, overlayDir);
     expect(files).toHaveLength(0);
   });
 });
@@ -460,6 +486,7 @@ describe('compareWithOverlay', () => {
     const files = [
       ...installToolOverlay('claude', projectDir, overlayDir),
       ...installTemplates(projectDir, overlayDir),
+      ...installMemory(projectDir, overlayDir),
     ];
     writeOverlayIndex(projectDir, {
       repo: 'r', branch: 'main', installedAt: '',

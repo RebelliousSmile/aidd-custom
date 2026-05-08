@@ -13,6 +13,7 @@ import { join } from 'path';
 import {
   installToolOverlay,
   installTemplates,
+  installMemory,
   writeOverlayIndex,
   cleanByIndex,
   checkInstallStatus,
@@ -47,6 +48,9 @@ function buildOverlay(dir: string) {
 
   mkdir(dir, 'templates', 'aidd');
   touch(join(dir, 'templates', 'aidd', 'tmpl.md'), '# Template');
+
+  mkdir(dir, 'memory');
+  touch(join(dir, 'memory', 'mem.md'), '# Memory');
 }
 
 /** Run a full install and record the index (mirrors what cli.ts does). */
@@ -55,6 +59,7 @@ function fullInstall(projectDir: string, overlayDir: string): string[] {
   const files = [
     ...installToolOverlay('claude', projectDir, overlayDir),
     ...installTemplates(projectDir, overlayDir),
+    ...installMemory(projectDir, overlayDir),
   ];
   writeOverlayIndex(projectDir, {
     repo: 'test/repo',
@@ -116,6 +121,11 @@ describe('Install — files land in the correct Claude directories', () => {
   it('places templates under aidd_docs/templates/ preserving subdirectory', () => {
     installTemplates(projectDir, overlayDir);
     expect(existsSync(join(projectDir, 'aidd_docs', 'templates', 'aidd', 'tmpl.md'))).toBe(true);
+  });
+
+  it('places memory files under aidd_docs/memory/external/', () => {
+    installMemory(projectDir, overlayDir);
+    expect(existsSync(join(projectDir, 'aidd_docs', 'memory', 'external', 'mem.md'))).toBe(true);
   });
 
   it('returns relative paths matching the actual destinations', () => {
