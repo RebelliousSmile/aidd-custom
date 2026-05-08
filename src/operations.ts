@@ -240,6 +240,31 @@ export function installTemplates(
   return installed;
 }
 
+export function installMemory(
+  projectRoot: string,
+  overlayTempDir: string,
+  hashes?: Record<string, string>,
+  write = true,
+): string[] {
+  const srcDir = join(overlayTempDir, 'memory');
+  const destDir = join(projectRoot, 'aidd_docs', 'memory', 'external');
+  if (!existsSync(srcDir)) return [];
+  const files = listAllFiles(srcDir);
+  const installed: string[] = [];
+  for (const f of files) {
+    const raw = readFileSync(join(srcDir, f));
+    const key = norm(join('aidd_docs', 'memory', 'external', f));
+    if (write) {
+      const dest = join(destDir, f);
+      mkdirSync(dirname(dest), { recursive: true });
+      writeFileSync(dest, raw);
+    }
+    installed.push(key);
+    if (hashes) hashes[key] = hashContent(raw);
+  }
+  return installed;
+}
+
 export function installGlobalOverlay(
   globalRoot: string,
   overlayTempDir: string,
@@ -348,6 +373,7 @@ export function repairFromOverlay(rootDir: string, overlayTempDir: string, isGlo
       files.push(...installToolOverlay(tool, rootDir, overlayTempDir));
     }
     files.push(...installTemplates(rootDir, overlayTempDir));
+    files.push(...installMemory(rootDir, overlayTempDir));
   }
 
   writeOverlayIndex(rootDir, { ...index, installedAt: new Date().toISOString(), files }, isGlobal);
@@ -467,6 +493,7 @@ export function compareWithOverlay(rootDir: string, overlayTempDir: string, isGl
       installToolOverlay(tool, rootDir, overlayTempDir, overlayHashes, false);
     }
     installTemplates(rootDir, overlayTempDir, overlayHashes, false);
+    installMemory(rootDir, overlayTempDir, overlayHashes, false);
   }
 
   // Count overlay files (for the count check)

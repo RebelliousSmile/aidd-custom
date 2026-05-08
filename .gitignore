@@ -3,3 +3,4 @@ node_modules/
 .opencode/
 opencode.json
 config/local.json
+overlay-check/

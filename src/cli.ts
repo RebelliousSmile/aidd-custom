@@ -8,6 +8,7 @@ import { getOverlayConfig, getGlobalConfig, GLOBAL_CONFIG_FILE } from './config.
 import {
   installToolOverlay,
   installTemplates,
+  installMemory,
   installGlobalOverlay,
   writeOverlayIndex,
   cleanByIndex,
@@ -159,6 +160,7 @@ program
         allFiles.push(...installToolOverlay(tool, projectRoot, tempDir, hashes));
       }
       allFiles.push(...installTemplates(projectRoot, tempDir, hashes));
+      allFiles.push(...installMemory(projectRoot, tempDir, hashes));
       writeOverlayIndex(projectRoot, {
         repo: overlayConfig.repo,
         branch: overlayConfig.branch,
@@ -249,6 +251,7 @@ program
           allFiles.push(...installToolOverlay(tool, projectRoot, tempDir));
         }
         allFiles.push(...installTemplates(projectRoot, tempDir));
+        allFiles.push(...installMemory(projectRoot, tempDir));
         writeOverlayIndex(projectRoot, {
           repo: overlayConfig.repo,
           branch: overlayConfig.branch,
