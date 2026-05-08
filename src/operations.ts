@@ -514,6 +514,7 @@ export function compareWithOverlay(rootDir: string, overlayTempDir: string, isGl
       overlayCount += countToolOverlay(tool, overlayTempDir);
     }
     overlayCount += getFileCount(join(overlayTempDir, 'templates'));
+    overlayCount += getFileCount(join(overlayTempDir, 'memory'));
   }
 
   const indexedCount = index?.files.length ?? 0;
