@@ -2,7 +2,7 @@
 import { Command } from 'commander';
 import { detectAllTools, } from './index.js';
 import { getOverlayConfig, getGlobalConfig, GLOBAL_CONFIG_FILE } from './config.js';
-import { installToolOverlay, installTemplates, installGlobalOverlay, writeOverlayIndex, cleanByIndex, checkInstallStatus, compareWithOverlay, repairFromOverlay, rehashFromDisk, } from './operations.js';
+import { installToolOverlay, installTemplates, installMemory, installGlobalOverlay, writeOverlayIndex, cleanByIndex, checkInstallStatus, compareWithOverlay, repairFromOverlay, rehashFromDisk, readOverlayIndex, writeAiddManifestIfMissing, } from './operations.js';
 import { mkdirSync, rmSync, writeFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { homedir, tmpdir } from 'os';
@@ -130,6 +130,7 @@ program
             allFiles.push(...installToolOverlay(tool, projectRoot, tempDir, hashes));
         }
         allFiles.push(...installTemplates(projectRoot, tempDir, hashes));
+        allFiles.push(...installMemory(projectRoot, tempDir, hashes));
         writeOverlayIndex(projectRoot, {
             repo: overlayConfig.repo,
             branch: overlayConfig.branch,
@@ -215,6 +216,7 @@ program
                 allFiles.push(...installToolOverlay(tool, projectRoot, tempDir));
             }
             allFiles.push(...installTemplates(projectRoot, tempDir));
+            allFiles.push(...installMemory(projectRoot, tempDir));
             writeOverlayIndex(projectRoot, {
                 repo: overlayConfig.repo,
                 branch: overlayConfig.branch,
@@ -242,6 +244,10 @@ program
         console.log('  Missing:');
         for (const f of status.missing)
             console.log(`    - ${f}`);
+    }
+    const existingIndex = readOverlayIndex(projectRoot);
+    if (existingIndex && writeAiddManifestIfMissing(projectRoot, existingIndex)) {
+        console.log('  ✓ Backfilled .aidd/manifest.json for upstream aidd CLI');
     }
     console.log('\n=== File Count Validation ===');
     console.log('Fetching overlay to compare counts...\n');

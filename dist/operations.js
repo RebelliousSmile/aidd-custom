@@ -3,6 +3,7 @@ import { join, dirname, relative } from 'path';
 import { createHash } from 'crypto';
 import { getToolConfig, getFileCount, hasFeature, } from './index.js';
 const PROJECT_INDEX = join('.aidd', 'aidd-custom.json');
+const AIDD_MANIFEST = join('.aidd', 'manifest.json');
 const GLOBAL_INDEX = 'aidd-overlay.json';
 function indexPath(rootDir, isGlobal) {
     return isGlobal ? join(rootDir, GLOBAL_INDEX) : join(rootDir, PROJECT_INDEX);
@@ -22,6 +23,75 @@ export function writeOverlayIndex(rootDir, index, isGlobal = false) {
     const p = indexPath(rootDir, isGlobal);
     mkdirSync(dirname(p), { recursive: true });
     writeFileSync(p, JSON.stringify(index, null, 2));
+    if (!isGlobal)
+        writeAiddManifestIfMissing(rootDir, index);
+}
+// Build the upstream @ai-driven-dev/cli manifest (version 1) from our OverlayIndex.
+// Hashes are MD5 (32 lowercase hex) per upstream's FileHash contract. Files under
+// aidd_docs/ go into the `docs` section; everything else is split per tool by dest dir.
+// Returns null when no tools are tracked (the upstream format requires per-tool buckets).
+export function buildAiddManifest(rootDir, index) {
+    const toolIds = index.tools ?? [];
+    if (toolIds.length === 0)
+        return null;
+    const docsFiles = [];
+    const claimedByTool = new Map();
+    for (const t of toolIds)
+        claimedByTool.set(t, []);
+    for (const relPath of index.files) {
+        if (relPath.startsWith('aidd_docs/')) {
+            docsFiles.push(relPath);
+            continue;
+        }
+        let claimed = false;
+        for (const tool of toolIds) {
+            const cfg = getToolConfig(tool);
+            const dirs = [cfg.commandsDir, cfg.agentsDir, cfg.rulesDir, ...(cfg.skillsDir ? [cfg.skillsDir] : [])];
+            if (dirs.some(d => relPath.startsWith(d + '/') || relPath === d)) {
+                claimedByTool.get(tool).push(relPath);
+                claimed = true;
+                break;
+            }
+        }
+        if (!claimed)
+            claimedByTool.get(toolIds[0]).push(relPath);
+    }
+    const md5OfFile = (rel) => {
+        const full = join(rootDir, rel);
+        if (!existsSync(full))
+            return '0'.repeat(32);
+        return createHash('md5').update(readFileSync(full)).digest('hex');
+    };
+    const trackedFiles = (rels) => rels.map(rel => ({ relativePath: rel, hash: md5OfFile(rel) }));
+    const tools = {};
+    for (const tool of toolIds) {
+        tools[tool] = {
+            toolId: tool,
+            version: index.branch,
+            files: trackedFiles(claimedByTool.get(tool)),
+        };
+    }
+    return {
+        version: 1,
+        docsDir: 'aidd_docs',
+        repo: index.repo,
+        tools,
+        docs: docsFiles.length > 0 ? { version: index.branch, files: trackedFiles(docsFiles) } : null,
+        scripts: null,
+    };
+}
+// Write .aidd/manifest.json (upstream format) only when absent — never overwrite a
+// manifest that the upstream `aidd` CLI might be managing. Returns true if written.
+export function writeAiddManifestIfMissing(rootDir, index) {
+    const p = join(rootDir, AIDD_MANIFEST);
+    if (existsSync(p))
+        return false;
+    const manifest = buildAiddManifest(rootDir, index);
+    if (manifest === null)
+        return false;
+    mkdirSync(dirname(p), { recursive: true });
+    writeFileSync(p, JSON.stringify(manifest, null, 2));
+    return true;
 }
 export function deleteOverlayIndex(rootDir, isGlobal = false) {
     const p = indexPath(rootDir, isGlobal);
@@ -198,6 +268,27 @@ export function installTemplates(projectRoot, overlayTempDir, hashes, write = tr
     }
     return installed;
 }
+export function installMemory(projectRoot, overlayTempDir, hashes, write = true) {
+    const srcDir = join(overlayTempDir, 'memory');
+    const destDir = join(projectRoot, 'aidd_docs', 'memory', 'external');
+    if (!existsSync(srcDir))
+        return [];
+    const files = listAllFiles(srcDir);
+    const installed = [];
+    for (const f of files) {
+        const raw = readFileSync(join(srcDir, f));
+        const key = norm(join('aidd_docs', 'memory', 'external', f));
+        if (write) {
+            const dest = join(destDir, f);
+            mkdirSync(dirname(dest), { recursive: true });
+            writeFileSync(dest, raw);
+        }
+        installed.push(key);
+        if (hashes)
+            hashes[key] = hashContent(raw);
+    }
+    return installed;
+}
 export function installGlobalOverlay(globalRoot, overlayTempDir, hashes, write = true) {
     const installed = [];
     const cmdsSrc = join(overlayTempDir, 'commands');
@@ -296,6 +387,7 @@ export function repairFromOverlay(rootDir, overlayTempDir, isGlobal = false) {
             files.push(...installToolOverlay(tool, rootDir, overlayTempDir));
         }
         files.push(...installTemplates(rootDir, overlayTempDir));
+        files.push(...installMemory(rootDir, overlayTempDir));
     }
     writeOverlayIndex(rootDir, { ...index, installedAt: new Date().toISOString(), files }, isGlobal);
     return files;
@@ -381,6 +473,7 @@ export function compareWithOverlay(rootDir, overlayTempDir, isGlobal = false) {
             installToolOverlay(tool, rootDir, overlayTempDir, overlayHashes, false);
         }
         installTemplates(rootDir, overlayTempDir, overlayHashes, false);
+        installMemory(rootDir, overlayTempDir, overlayHashes, false);
     }
     // Count overlay files (for the count check)
     let overlayCount = 0;
@@ -402,6 +495,7 @@ export function compareWithOverlay(rootDir, overlayTempDir, isGlobal = false) {
             overlayCount += countToolOverlay(tool, overlayTempDir);
         }
         overlayCount += getFileCount(join(overlayTempDir, 'templates'));
+        overlayCount += getFileCount(join(overlayTempDir, 'memory'));
     }
     const indexedCount = index?.files.length ?? 0;
     // Per-file content diff (only when we have a hash baseline)

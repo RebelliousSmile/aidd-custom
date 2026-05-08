@@ -20,6 +20,7 @@ export interface OverlayIndex {
 }
 
 const PROJECT_INDEX = join('.aidd', 'aidd-custom.json');
+const AIDD_MANIFEST = join('.aidd', 'manifest.json');
 const GLOBAL_INDEX = 'aidd-overlay.json';
 
 function indexPath(rootDir: string, isGlobal: boolean): string {
@@ -40,6 +41,75 @@ export function writeOverlayIndex(rootDir: string, index: OverlayIndex, isGlobal
   const p = indexPath(rootDir, isGlobal);
   mkdirSync(dirname(p), { recursive: true });
   writeFileSync(p, JSON.stringify(index, null, 2));
+  if (!isGlobal) writeAiddManifestIfMissing(rootDir, index);
+}
+
+// Build the upstream @ai-driven-dev/cli manifest (version 1) from our OverlayIndex.
+// Hashes are MD5 (32 lowercase hex) per upstream's FileHash contract. Files under
+// aidd_docs/ go into the `docs` section; everything else is split per tool by dest dir.
+// Returns null when no tools are tracked (the upstream format requires per-tool buckets).
+export function buildAiddManifest(rootDir: string, index: OverlayIndex): object | null {
+  const toolIds = index.tools ?? [];
+  if (toolIds.length === 0) return null;
+
+  const docsFiles: string[] = [];
+  const claimedByTool = new Map<ToolType, string[]>();
+  for (const t of toolIds) claimedByTool.set(t, []);
+
+  for (const relPath of index.files) {
+    if (relPath.startsWith('aidd_docs/')) {
+      docsFiles.push(relPath);
+      continue;
+    }
+    let claimed = false;
+    for (const tool of toolIds) {
+      const cfg = getToolConfig(tool);
+      const dirs = [cfg.commandsDir, cfg.agentsDir, cfg.rulesDir, ...(cfg.skillsDir ? [cfg.skillsDir] : [])];
+      if (dirs.some(d => relPath.startsWith(d + '/') || relPath === d)) {
+        claimedByTool.get(tool)!.push(relPath);
+        claimed = true;
+        break;
+      }
+    }
+    if (!claimed) claimedByTool.get(toolIds[0])!.push(relPath);
+  }
+
+  const md5OfFile = (rel: string): string => {
+    const full = join(rootDir, rel);
+    if (!existsSync(full)) return '0'.repeat(32);
+    return createHash('md5').update(readFileSync(full)).digest('hex');
+  };
+  const trackedFiles = (rels: string[]) => rels.map(rel => ({ relativePath: rel, hash: md5OfFile(rel) }));
+
+  const tools: Record<string, unknown> = {};
+  for (const tool of toolIds) {
+    tools[tool] = {
+      toolId: tool,
+      version: index.branch,
+      files: trackedFiles(claimedByTool.get(tool)!),
+    };
+  }
+
+  return {
+    version: 1,
+    docsDir: 'aidd_docs',
+    repo: index.repo,
+    tools,
+    docs: docsFiles.length > 0 ? { version: index.branch, files: trackedFiles(docsFiles) } : null,
+    scripts: null,
+  };
+}
+
+// Write .aidd/manifest.json (upstream format) only when absent — never overwrite a
+// manifest that the upstream `aidd` CLI might be managing. Returns true if written.
+export function writeAiddManifestIfMissing(rootDir: string, index: OverlayIndex): boolean {
+  const p = join(rootDir, AIDD_MANIFEST);
+  if (existsSync(p)) return false;
+  const manifest = buildAiddManifest(rootDir, index);
+  if (manifest === null) return false;
+  mkdirSync(dirname(p), { recursive: true });
+  writeFileSync(p, JSON.stringify(manifest, null, 2));
+  return true;
 }
 
 export function deleteOverlayIndex(rootDir: string, isGlobal = false): void {

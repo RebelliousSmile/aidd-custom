@@ -12,6 +12,8 @@ import {
   readOverlayIndex,
   writeOverlayIndex,
   deleteOverlayIndex,
+  buildAiddManifest,
+  writeAiddManifestIfMissing,
 } from '../src/operations.js';
 
 // ---------- helpers ----------
@@ -533,5 +535,100 @@ describe('compareWithOverlay', () => {
     }, true);
     const result = compareWithOverlay(globalDir, overlayDir, true);
     expect(result.inSync).toBe(true);
+  });
+});
+
+// ============================================================
+// Upstream aidd-cli manifest (.aidd/manifest.json)
+// ============================================================
+
+describe('aidd-cli upstream manifest', () => {
+  beforeEach(() => {
+    mkdir(projectDir, '.claude');
+  });
+
+  it('builds a v1 manifest with repo/branch from the index, not hardcoded values', () => {
+    const files = installToolOverlay('claude', projectDir, overlayDir);
+    const manifest = buildAiddManifest(projectDir, {
+      repo: 'custom-owner/custom-overlay', branch: 'feature-x', installedAt: '', files, tools: ['claude'],
+    }) as Record<string, unknown>;
+    expect(manifest.version).toBe(1);
+    expect(manifest.repo).toBe('custom-owner/custom-overlay');
+    expect(manifest.docsDir).toBe('aidd_docs');
+    const claudeEntry = (manifest.tools as Record<string, { version: string }>)['claude'];
+    expect(claudeEntry.version).toBe('feature-x');
+  });
+
+  it('emits 32-char lowercase hex MD5 hashes (upstream FileHash contract)', () => {
+    const files = installToolOverlay('claude', projectDir, overlayDir);
+    const manifest = buildAiddManifest(projectDir, {
+      repo: 'a/b', branch: 'main', installedAt: '', files, tools: ['claude'],
+    }) as { tools: Record<string, { files: { hash: string }[] }> };
+    const allHashes = Object.values(manifest.tools).flatMap(t => t.files.map(f => f.hash));
+    expect(allHashes.length).toBeGreaterThan(0);
+    for (const h of allHashes) expect(h).toMatch(/^[0-9a-f]{32}$/);
+  });
+
+  it('routes aidd_docs/* into the docs section, tool dirs into their tool', () => {
+    const claudeFiles = installToolOverlay('claude', projectDir, overlayDir);
+    const tplFiles = installTemplates(projectDir, overlayDir);
+    const memFiles = installMemory(projectDir, overlayDir);
+    const manifest = buildAiddManifest(projectDir, {
+      repo: 'a/b', branch: 'main', installedAt: '',
+      files: [...claudeFiles, ...tplFiles, ...memFiles],
+      tools: ['claude'],
+    }) as { tools: Record<string, { files: { relativePath: string }[] }>, docs: { files: { relativePath: string }[] } | null };
+
+    const claudePaths = manifest.tools['claude'].files.map(f => f.relativePath);
+    expect(claudePaths.every(p => p.startsWith('.claude/'))).toBe(true);
+    expect(manifest.docs).not.toBeNull();
+    const docsPaths = manifest.docs!.files.map(f => f.relativePath);
+    expect(docsPaths.every(p => p.startsWith('aidd_docs/'))).toBe(true);
+    expect(docsPaths).toContain('aidd_docs/templates/aidd/tmpl.md');
+    expect(docsPaths).toContain('aidd_docs/memory/external/mem.md');
+  });
+
+  it('returns null when the index has no tools (no buckets to fill)', () => {
+    expect(buildAiddManifest(projectDir, {
+      repo: 'a/b', branch: 'main', installedAt: '', files: ['foo.md'],
+    })).toBeNull();
+  });
+
+  it('writeOverlayIndex creates manifest.json alongside aidd-custom.json', () => {
+    const files = installToolOverlay('claude', projectDir, overlayDir);
+    writeOverlayIndex(projectDir, {
+      repo: 'a/b', branch: 'main', installedAt: '', files, tools: ['claude'],
+    });
+    expect(existsSync(join(projectDir, '.aidd', 'aidd-custom.json'))).toBe(true);
+    expect(existsSync(join(projectDir, '.aidd', 'manifest.json'))).toBe(true);
+    const m = JSON.parse(readFileSync(join(projectDir, '.aidd', 'manifest.json'), 'utf-8'));
+    expect(m.version).toBe(1);
+    expect(m.repo).toBe('a/b');
+  });
+
+  it('does not overwrite an existing manifest.json (upstream may own it)', () => {
+    mkdir(projectDir, '.aidd');
+    const sentinel = JSON.stringify({ version: 1, marker: 'owned-by-upstream' });
+    writeFileSync(join(projectDir, '.aidd', 'manifest.json'), sentinel);
+
+    const files = installToolOverlay('claude', projectDir, overlayDir);
+    writeOverlayIndex(projectDir, {
+      repo: 'a/b', branch: 'main', installedAt: '', files, tools: ['claude'],
+    });
+    const after = readFileSync(join(projectDir, '.aidd', 'manifest.json'), 'utf-8');
+    expect(after).toBe(sentinel);
+  });
+
+  it('writeAiddManifestIfMissing returns false when file exists, true when written', () => {
+    const idx = { repo: 'a/b', branch: 'main', installedAt: '', files: [] as string[], tools: ['claude' as const] };
+    expect(writeAiddManifestIfMissing(projectDir, idx)).toBe(true);
+    expect(writeAiddManifestIfMissing(projectDir, idx)).toBe(false);
+  });
+
+  it('global writeOverlayIndex does not create .aidd/manifest.json', () => {
+    const globalDir = join(base, 'global');
+    mkdir(globalDir);
+    writeOverlayIndex(globalDir, { repo: 'g/r', branch: 'main', installedAt: '', files: [] }, true);
+    expect(existsSync(join(globalDir, '.aidd', 'manifest.json'))).toBe(false);
   });
 });

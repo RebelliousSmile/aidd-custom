@@ -16,6 +16,8 @@ import {
   compareWithOverlay,
   repairFromOverlay,
   rehashFromDisk,
+  readOverlayIndex,
+  writeAiddManifestIfMissing,
 } from './operations.js';
 import { mkdirSync, rmSync, writeFileSync } from 'fs';
 import { join, dirname } from 'path';
@@ -274,6 +276,11 @@ program
     if (status.missing.length > 0) {
       console.log('  Missing:');
       for (const f of status.missing) console.log(`    - ${f}`);
+    }
+
+    const existingIndex = readOverlayIndex(projectRoot);
+    if (existingIndex && writeAiddManifestIfMissing(projectRoot, existingIndex)) {
+      console.log('  ✓ Backfilled .aidd/manifest.json for upstream aidd CLI');
     }
 
     console.log('\n=== File Count Validation ===');

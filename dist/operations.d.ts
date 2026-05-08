@@ -9,9 +9,12 @@ export interface OverlayIndex {
 }
 export declare function readOverlayIndex(rootDir: string, isGlobal?: boolean): OverlayIndex | null;
 export declare function writeOverlayIndex(rootDir: string, index: OverlayIndex, isGlobal?: boolean): void;
+export declare function buildAiddManifest(rootDir: string, index: OverlayIndex): object | null;
+export declare function writeAiddManifestIfMissing(rootDir: string, index: OverlayIndex): boolean;
 export declare function deleteOverlayIndex(rootDir: string, isGlobal?: boolean): void;
 export declare function installToolOverlay(tool: ToolType, projectRoot: string, overlayTempDir: string, hashes?: Record<string, string>, write?: boolean): string[];
 export declare function installTemplates(projectRoot: string, overlayTempDir: string, hashes?: Record<string, string>, write?: boolean): string[];
+export declare function installMemory(projectRoot: string, overlayTempDir: string, hashes?: Record<string, string>, write?: boolean): string[];
 export declare function installGlobalOverlay(globalRoot: string, overlayTempDir: string, hashes?: Record<string, string>, write?: boolean): string[];
 export declare function cleanByIndex(rootDir: string, isGlobal?: boolean): number;
 export declare function repairFromOverlay(rootDir: string, overlayTempDir: string, isGlobal?: boolean): string[];
