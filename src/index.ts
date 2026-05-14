@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { existsSync, readdirSync, statSync } from 'fs';
+import { existsSync, readdirSync, statSync, readFileSync } from 'fs';
 import { join } from 'path';
 
 export type ToolType = 'claude' | 'copilot' | 'cursor' | 'opencode';
@@ -91,9 +91,41 @@ export function detectTool(basePath: string): ToolType | null {
 }
 
 export function detectAllTools(basePath: string): ToolType[] {
+  // First try to read from manifest config (.aidd/aidd-custom.json)
+  const manifestTools = detectToolsFromManifest(basePath);
+  if (manifestTools && manifestTools.length > 0) {
+    return manifestTools;
+  }
+  // Fallback: scan filesystem (original behavior)
   return (Object.entries(TOOL_DIRECTORIES) as [ToolType, string[]][])
     .filter(([, dirs]) => toolDirsExist(basePath, dirs))
     .map(([tool]) => tool);
+}
+
+/**
+ * Read the tools list from .aidd/aidd-custom.json manifest.
+ * Returns null if no manifest exists, otherwise returns the filtered tools array.
+ * This ensures doctor/install only work with explicitly configured tools.
+ */
+export function detectToolsFromManifest(basePath: string): ToolType[] | null {
+  const manifestPath = join(basePath, '.aidd', 'aidd-custom.json');
+  if (!existsSync(manifestPath)) {
+    return null;
+  }
+  try {
+    const config = JSON.parse(readFileSync(manifestPath, 'utf-8'));
+    if (Array.isArray(config.tools) && config.tools.length > 0) {
+      // Validate that all listed tools are known
+      const known = Object.keys(TOOL_DIRECTORIES) as ToolType[];
+      const validTools = config.tools.filter(t => known.includes(t as ToolType));
+      if (validTools.length > 0) {
+        return validTools as ToolType[];
+      }
+    }
+  } catch (e) {
+    // Invalid JSON — ignore, fall through to filesystem scan
+  }
+  return null;
 }
 
 // ─── config schema ────────────────────────────────────────────────────────────
